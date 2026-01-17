@@ -1,0 +1,181 @@
+{
+  "name": "android-studio-lite",
+  "displayName": "Android Studio Lite",
+  "description": "بديل خفيف لـ Android Studio - يوفر جميع المميزات الأساسية لتطوير Android في VS Code",
+  "version": "0.1.0",
+  "publisher": "android-dev",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "android",
+    "gradle",
+    "adb",
+    "mobile",
+    "emulator"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/build.gradle",
+    "workspaceContains:**/build.gradle.kts",
+    "onCommand:android.buildApk",
+    "onCommand:android.runApp",
+    "onView:androidDevices"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "android.buildApk",
+        "title": "📦 Build APK",
+        "category": "Android"
+      },
+      {
+        "command": "android.buildDebug",
+        "title": "🔨 Build Debug APK",
+        "category": "Android"
+      },
+      {
+        "command": "android.buildRelease",
+        "title": "📦 Build Release APK",
+        "category": "Android"
+      },
+      {
+        "command": "android.cleanProject",
+        "title": "🧹 Clean Project",
+        "category": "Android"
+      },
+      {
+        "command": "android.syncGradle",
+        "title": "🔄 Sync Gradle",
+        "category": "Android"
+      },
+      {
+        "command": "android.runApp",
+        "title": "▶️ Run on Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.debugApp",
+        "title": "🐛 Debug on Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.selectDevice",
+        "title": "📱 Select Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.refreshDevices",
+        "title": "🔄 Refresh Devices",
+        "category": "Android",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "android.showLogcat",
+        "title": "📋 Show Logcat",
+        "category": "Android"
+      },
+      {
+        "command": "android.clearLogcat",
+        "title": "🗑️ Clear Logcat",
+        "category": "Android"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "android-explorer",
+          "title": "Android",
+          "icon": "resources/android-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "android-explorer": [
+        {
+          "id": "androidDevices",
+          "name": "📱 Devices",
+          "contextualTitle": "Android Devices"
+        },
+        {
+          "id": "androidBuildVariants",
+          "name": "🔨 Build Variants",
+          "contextualTitle": "Build Variants"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "android.refreshDevices",
+          "when": "view == androidDevices",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "android.buildApk",
+          "when": "workspaceContains:**/build.gradle || workspaceContains:**/build.gradle.kts"
+        },
+        {
+          "command": "android.runApp",
+          "when": "workspaceContains:**/build.gradle || workspaceContains:**/build.gradle.kts"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Android Studio Lite",
+      "properties": {
+        "android.sdkPath": {
+          "type": "string",
+          "default": "",
+          "description": "مسار Android SDK (سيتم اكتشافه تلقائياً إذا كان فارغاً)"
+        },
+        "android.gradlePath": {
+          "type": "string",
+          "default": "",
+          "description": "مسار Gradle (سيتم استخدام Gradle Wrapper إذا كان فارغاً)"
+        },
+        "android.adbPath": {
+          "type": "string",
+          "default": "",
+          "description": "مسار ADB (سيتم اكتشافه من SDK إذا كان فارغاً)"
+        },
+        "android.logcat.maxLines": {
+          "type": "number",
+          "default": 1000,
+          "description": "الحد الأقصى لعدد سطور Logcat"
+        },
+        "android.build.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "إظهار إشعارات عند اكتمال البناء"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "tree-kill": "^1.2.2"
+  }
+}
