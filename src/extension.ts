@@ -115,7 +115,20 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         context.subscriptions.push(
-            vscode.commands.registerCommand('android.clearLogcat', async () => {
+            vscode.commands.registerCommand('android.toggleLogcatFilter', async () => {
+                await logcatManager.toggleFilterMode();
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.stopLogcat', () => {
+                logcatManager.stopLogcat();
+                vscode.window.showInformationMessage('⏹️ Logcat stopped');
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.clearLogcat', () => {
                 logcatManager.clearLogcat();
             })
         );

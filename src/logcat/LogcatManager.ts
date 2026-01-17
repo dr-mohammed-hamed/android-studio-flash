@@ -2,19 +2,29 @@ import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
 import { DeviceManager } from '../devices/DeviceManager';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
+import { PackageNameDetector } from '../utils/PackageNameDetector';
+
+export type LogcatFilterMode = 'all' | 'app' | 'tag';
 
 export class LogcatManager {
     private outputChannel: vscode.OutputChannel;
     private logcatProcess: ChildProcess | null = null;
     private sdkManager: AndroidSDKManager;
     private isRunning: boolean = false;
+    private currentFilterMode: LogcatFilterMode = 'app';
+    private currentPackageName: string = '';
+    private currentTag: string = '';
+    private useGrepFilter: boolean = false; // للتصفية في الكود إذا لم يعمل --pid
 
     constructor(private deviceManager: DeviceManager) {
         this.outputChannel = vscode.window.createOutputChannel('Android Logcat');
         this.sdkManager = new AndroidSDKManager();
     }
 
-    async showLogcat(): Promise<void> {
+    /**
+     * عرض Logcat مع التصفية
+     */
+    async showLogcat(filterMode?: LogcatFilterMode, packageName?: string, tag?: string): Promise<void> {
         const selectedDevice = this.deviceManager.getSelectedDevice();
         
         if (!selectedDevice) {
@@ -22,27 +32,124 @@ export class LogcatManager {
             return;
         }
 
-        this.outputChannel.show(true);
+        // إيقاف العملية السابقة إن وجدت
+        this.stopLogcat();
 
-        if (this.isRunning) {
-            return;
+        // تحديد وضع التصفية
+        if (filterMode) {
+            this.currentFilterMode = filterMode;
         }
+
+        if (packageName) {
+            this.currentPackageName = packageName;
+        }
+
+        if (tag) {
+            this.currentTag = tag;
+        }
+
+        // إذا كان الوضع "app" ولا يوجد package name
+        if (this.currentFilterMode === 'app' && !this.currentPackageName) {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            const projectRoot = workspaceFolder?.uri.fsPath;
+
+            // 🎯 استخدام النظام الذكي للحصول على جميع المصادر
+            const detectionResults = await PackageNameDetector.detectPackageNameSmart(
+                this.sdkManager.getADBPath(),
+                selectedDevice.id,
+                projectRoot
+            );
+
+            if (detectionResults.length === 0) {
+                vscode.window.showWarningMessage('⚠️ لم يتم العثور على Package Name. سيتم الطلب يدوياً.');
+                const input = await vscode.window.showInputBox({
+                    prompt: 'أدخل Package Name للتطبيق',
+                    placeHolder: 'com.example.app'
+                });
+                
+                if (!input) {
+                    return;
+                }
+                
+                this.currentPackageName = input;
+            } else {
+                // عرض جميع النتائج للمستخدم
+                const selectedPackage = await PackageNameDetector.promptForPackageName(detectionResults);
+
+                if (!selectedPackage) {
+                    return; // المستخدم ألغى
+                }
+
+                this.currentPackageName = selectedPackage;
+                
+                // عرض المصدر المختار
+                const selected = detectionResults.find(r => r.packageName === selectedPackage);
+                if (selected) {
+                    const sourceNames = {
+                        apk: 'APK المبني',
+                        foreground: 'التطبيق الأمامي',
+                        gradle: 'build.gradle',
+                        manifest: 'AndroidManifest.xml',
+                        device: 'الجهاز'
+                    };
+                    console.log(`✅ Using package: ${selectedPackage} (from ${sourceNames[selected.source]})`);
+                }
+            }
+        }
+
+        // إذا كان الوضع "tag" ولا يوجد tag، اسأل المستخدم
+        if (this.currentFilterMode === 'tag' && !this.currentTag) {
+            const input = await vscode.window.showInputBox({
+                prompt: 'أدخل TAG للتصفية',
+                placeHolder: 'MyApp'
+            });
+
+            if (!input) {
+                return;
+            }
+
+            this.currentTag = input;
+        }
+
+        this.outputChannel.show(true);
 
         try {
             const adbPath = this.sdkManager.getADBPath();
             
             this.outputChannel.clear();
-            this.outputChannel.appendLine(`📱 Logcat from: ${selectedDevice.model || selectedDevice.id}`);
+            this.outputChannel.appendLine('━'.repeat(80));
+            this.outputChannel.appendLine(`📱 Device: ${selectedDevice.model || selectedDevice.id}`);
+            this.outputChannel.appendLine(`🔍 Filter Mode: ${this.getFilterModeLabel()}`);
+            this.outputChannel.appendLine('━'.repeat(80));
 
-            this.logcatProcess = spawn(adbPath, ['-s', selectedDevice.id, 'logcat', '-v', 'time']);
+            // بناء الأمر حسب وضع التصفية (الآن async)
+            this.useGrepFilter = false; // reset
+            const logcatArgs = await this.buildLogcatArgs(selectedDevice.id);
+
+            this.logcatProcess = spawn(adbPath, logcatArgs);
             this.isRunning = true;
 
             this.logcatProcess.stdout?.on('data', (data: Buffer) => {
-                this.outputChannel.appendLine(data.toString());
+                const lines = data.toString().split('\n');
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        // إذا كنا نستخدم grep filter (التطبيق غير شغال)
+                        if (this.useGrepFilter && this.currentPackageName) {
+                            // تصفية السطور التي تحتوي على package name
+                            if (line.includes(this.currentPackageName)) {
+                                this.outputChannel.appendLine(this.formatLogLine(line));
+                            }
+                        } else {
+                            this.outputChannel.appendLine(this.formatLogLine(line));
+                        }
+                    }
+                });
             });
 
             this.logcatProcess.on('close', () => {
                 this.isRunning = false;
+                this.outputChannel.appendLine('━'.repeat(80));
+                this.outputChannel.appendLine('Logcat ended');
             });
 
         } catch (error: any) {
@@ -50,14 +157,170 @@ export class LogcatManager {
         }
     }
 
+    /**
+     * بناء arguments للـ logcat حسب وضع التصفية
+     */
+    private async buildLogcatArgs(deviceId: string): Promise<string[]> {
+        const args = ['-s', deviceId, 'logcat', '-v', 'time'];
+
+        switch (this.currentFilterMode) {
+            case 'app':
+                if (this.currentPackageName) {
+                    try {
+                        // الحصول على PID من الجهاز
+                        const adbPath = this.sdkManager.getADBPath();
+                        const { exec } = require('child_process');
+                        const { promisify } = require('util');
+                        const execAsync = promisify(exec);
+                        
+                        const { stdout } = await execAsync(
+                            `"${adbPath}" -s ${deviceId} shell "pidof -s ${this.currentPackageName}"`
+                        );
+                        
+                        const pid = stdout.trim();
+                        
+                        if (pid && pid !== '') {
+                            console.log(`✅ Found PID for ${this.currentPackageName}: ${pid}`);
+                            args.push('--pid', pid);
+                        } else {
+                            console.log(`⚠️ App ${this.currentPackageName} is not running. Showing all logs with grep filter instead.`);
+                            // بديل: استخدام grep للتصفية
+                            // سنستخدم logcat عادي ونصفي في الكود
+                            this.useGrepFilter = true;
+                        }
+                    } catch (error) {
+                        console.log(`⚠️ Could not get PID. App may not be running. Will show all logs.`);
+                        this.useGrepFilter = true;
+                    }
+                }
+                break;
+
+            case 'tag':
+                if (this.currentTag) {
+                    // تصفية حسب TAG
+                    args.push('-s');
+                    args.push(`${this.currentTag}:*`);
+                }
+                break;
+
+            case 'all':
+            default:
+                // لا تصفية - كل السجلات
+                break;
+        }
+
+        return args;
+    }
+
+    /**
+     * الحصول على اسم وضع التصفية
+     */
+    private getFilterModeLabel(): string {
+        switch (this.currentFilterMode) {
+            case 'all':
+                return 'All Logs (جميع السجلات)';
+            case 'app':
+                return `App Only: ${this.currentPackageName}`;
+            case 'tag':
+                return `Tag Filter: ${this.currentTag}`;
+            default:
+                return 'Unknown';
+        }
+    }
+
+    /**
+     * تبديل وضع التصفية
+     */
+    async toggleFilterMode(): Promise<void> {
+        const modes: { label: string; mode: LogcatFilterMode; description: string }[] = [
+            {
+                label: '$(package) App Only',
+                mode: 'app',
+                description: 'عرض سجلات التطبيق فقط (مثل Android Studio)'
+            },
+            {
+                label: '$(list-tree) All Logs',
+                mode: 'all',
+                description: 'عرض جميع السجلات من الجهاز'
+            },
+            {
+                label: '$(tag) Tag Filter',
+                mode: 'tag',
+                description: 'تصفية حسب TAG معين'
+            }
+        ];
+
+        const selected = await vscode.window.showQuickPick(modes, {
+            placeHolder: 'اختر وضع التصفية'
+        });
+
+        if (selected) {
+            this.currentFilterMode = selected.mode;
+            
+            // إعادة تشغيل Logcat بالوضع الجديد
+            if (this.isRunning) {
+                await this.showLogcat();
+            } else {
+                vscode.window.showInformationMessage(`✅ تم تغيير وضع التصفية إلى: ${selected.label}`);
+            }
+        }
+    }
+
+    /**
+     * تنسيق سطر السجل (إضافة ألوان حسب المستوى)
+     */
+    private formatLogLine(line: string): string {
+        if (line.includes(' E ') || line.includes('ERROR')) {
+            return `❌ ${line}`;
+        } else if (line.includes(' W ') || line.includes('WARNING')) {
+            return `⚠️  ${line}`;
+        } else if (line.includes(' I ') || line.includes('INFO')) {
+            return `ℹ️  ${line}`;
+        } else if (line.includes(' D ') || line.includes('DEBUG')) {
+            return `🔍 ${line}`;
+        } else if (line.includes(' V ') || line.includes('VERBOSE')) {
+            return `💬 ${line}`;
+        }
+        
+        return line;
+    }
+
+    /**
+     * مسح Logcat
+     */
     clearLogcat(): void {
         this.outputChannel.clear();
+        this.outputChannel.appendLine('🗑️ Logcat cleared');
+        
+        const selectedDevice = this.deviceManager.getSelectedDevice();
+        if (selectedDevice && this.isRunning) {
+            this.outputChannel.appendLine('━'.repeat(80));
+            this.outputChannel.appendLine(`📱 Device: ${selectedDevice.model || selectedDevice.id}`);
+            this.outputChannel.appendLine(`🔍 Filter Mode: ${this.getFilterModeLabel()}`);
+            this.outputChannel.appendLine('━'.repeat(80));
+        }
+    }
+
+    /**
+     * إيقاف Logcat
+     */
+    stopLogcat(): void {
+        if (this.logcatProcess) {
+            this.logcatProcess.kill();
+            this.logcatProcess = null;
+            this.isRunning = false;
+        }
+    }
+
+    /**
+     * الحصول على وضع التصفية الحالي
+     */
+    getCurrentFilterMode(): LogcatFilterMode {
+        return this.currentFilterMode;
     }
 
     dispose() {
-        if (this.logcatProcess) {
-            this.logcatProcess.kill();
-        }
+        this.stopLogcat();
         this.outputChannel.dispose();
     }
 }

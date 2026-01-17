@@ -112,7 +112,14 @@ async function activate(context) {
         context.subscriptions.push(vscode.commands.registerCommand('android.showLogcat', async () => {
             await logcatManager.showLogcat();
         }));
-        context.subscriptions.push(vscode.commands.registerCommand('android.clearLogcat', async () => {
+        context.subscriptions.push(vscode.commands.registerCommand('android.toggleLogcatFilter', async () => {
+            await logcatManager.toggleFilterMode();
+        }));
+        context.subscriptions.push(vscode.commands.registerCommand('android.stopLogcat', () => {
+            logcatManager.stopLogcat();
+            vscode.window.showInformationMessage('⏹️ Logcat stopped');
+        }));
+        context.subscriptions.push(vscode.commands.registerCommand('android.clearLogcat', () => {
             logcatManager.clearLogcat();
         }));
         // تحديث أولي للأجهزة

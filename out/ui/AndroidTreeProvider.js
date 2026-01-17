@@ -96,7 +96,9 @@ class AndroidTreeProvider {
         if (element.label === '🛠️ Tools') {
             return [
                 new AndroidTreeItem('📋 Show Logcat', 'android.showLogcat', 'action'),
+                new AndroidTreeItem('🔍 Logcat Filter Mode', 'android.toggleLogcatFilter', 'action'),
                 new AndroidTreeItem('🗑️  Clear Logcat', 'android.clearLogcat', 'action'),
+                new AndroidTreeItem('⏹️  Stop Logcat', 'android.stopLogcat', 'action'),
                 new AndroidTreeItem('🔄 Refresh Devices', 'android.refreshDevices', 'action')
             ];
         }

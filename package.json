@@ -87,6 +87,16 @@
         "category": "Android"
       },
       {
+        "command": "android.toggleLogcatFilter",
+        "title": "🔍 Change Logcat Filter Mode",
+        "category": "Android"
+      },
+      {
+        "command": "android.stopLogcat",
+        "title": "⏹️ Stop Logcat",
+        "category": "Android"
+      },
+      {
         "command": "android.clearLogcat",
         "title": "🗑️ Clear Logcat",
         "category": "Android"
