@@ -71,6 +71,11 @@
         "category": "Android"
       },
       {
+        "command": "android.selectDeviceFromTree",
+        "title": "📱 Select Device from Tree",
+        "category": "Android"
+      },
+      {
         "command": "android.refreshDevices",
         "title": "🔄 Refresh Devices",
         "category": "Android",
@@ -99,14 +104,9 @@
     "views": {
       "android-explorer": [
         {
-          "id": "androidDevices",
-          "name": "📱 Devices",
-          "contextualTitle": "Android Devices"
-        },
-        {
-          "id": "androidBuildVariants",
-          "name": "🔨 Build Variants",
-          "contextualTitle": "Build Variants"
+          "id": "androidPanel",
+          "name": "Android Control Panel",
+          "contextualTitle": "Android Development"
         }
       ]
     },

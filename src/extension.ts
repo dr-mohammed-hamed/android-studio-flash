@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { AndroidSDKManager } from './core/AndroidSDKManager';
 import { GradleService } from './core/GradleService';
 import { DeviceManager } from './devices/DeviceManager';
-import { DeviceTreeProvider } from './devices/DeviceTreeProvider';
+import { AndroidTreeProvider } from './ui/AndroidTreeProvider';
 import { BuildSystem } from './build/BuildSystem';
 import { BuildStatusBar } from './ui/BuildStatusBar';
 import { LogcatManager } from './logcat/LogcatManager';
@@ -11,6 +11,7 @@ let deviceManager: DeviceManager;
 let buildSystem: BuildSystem;
 let statusBar: BuildStatusBar;
 let logcatManager: LogcatManager;
+let treeProvider: AndroidTreeProvider;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Android Studio Lite is now active!');
@@ -25,10 +26,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // تهيئة واجهة المستخدم
         statusBar = new BuildStatusBar(deviceManager);
-        const deviceTreeProvider = new DeviceTreeProvider(deviceManager);
+        treeProvider = new AndroidTreeProvider(deviceManager, buildSystem, logcatManager);
 
-        // تسجيل Tree View للأجهزة
-        vscode.window.registerTreeDataProvider('androidDevices', deviceTreeProvider);
+        // تسجيل Tree View
+        vscode.window.registerTreeDataProvider('androidPanel', treeProvider);
 
         // تسجيل الأوامر - Build Commands
         context.subscriptions.push(
@@ -82,9 +83,26 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         context.subscriptions.push(
+            vscode.commands.registerCommand('android.selectDeviceFromTree', async (device) => {
+                // تحديد الجهاز مباشرة من Tree
+                if (device) {
+                    deviceManager.getDevices().forEach(d => {
+                        if (d.id === device.id) {
+                            deviceManager['selectedDevice'] = d;
+                            deviceManager['onDidChangeDevicesEmitter'].fire();
+                        }
+                    });
+                    statusBar.update();
+                    treeProvider.refresh();
+                    vscode.window.showInformationMessage(`✅ Selected: ${device.id}`);
+                }
+            })
+        );
+
+        context.subscriptions.push(
             vscode.commands.registerCommand('android.refreshDevices', async () => {
                 await deviceManager.refreshDevices();
-                deviceTreeProvider.refresh();
+                treeProvider.refresh();
                 statusBar.update();
             })
         );

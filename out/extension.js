@@ -39,7 +39,7 @@ const vscode = __importStar(require("vscode"));
 const AndroidSDKManager_1 = require("./core/AndroidSDKManager");
 const GradleService_1 = require("./core/GradleService");
 const DeviceManager_1 = require("./devices/DeviceManager");
-const DeviceTreeProvider_1 = require("./devices/DeviceTreeProvider");
+const AndroidTreeProvider_1 = require("./ui/AndroidTreeProvider");
 const BuildSystem_1 = require("./build/BuildSystem");
 const BuildStatusBar_1 = require("./ui/BuildStatusBar");
 const LogcatManager_1 = require("./logcat/LogcatManager");
@@ -47,6 +47,7 @@ let deviceManager;
 let buildSystem;
 let statusBar;
 let logcatManager;
+let treeProvider;
 async function activate(context) {
     console.log('🚀 Android Studio Lite is now active!');
     try {
@@ -58,9 +59,9 @@ async function activate(context) {
         logcatManager = new LogcatManager_1.LogcatManager(deviceManager);
         // تهيئة واجهة المستخدم
         statusBar = new BuildStatusBar_1.BuildStatusBar(deviceManager);
-        const deviceTreeProvider = new DeviceTreeProvider_1.DeviceTreeProvider(deviceManager);
-        // تسجيل Tree View للأجهزة
-        vscode.window.registerTreeDataProvider('androidDevices', deviceTreeProvider);
+        treeProvider = new AndroidTreeProvider_1.AndroidTreeProvider(deviceManager, buildSystem, logcatManager);
+        // تسجيل Tree View
+        vscode.window.registerTreeDataProvider('androidPanel', treeProvider);
         // تسجيل الأوامر - Build Commands
         context.subscriptions.push(vscode.commands.registerCommand('android.buildApk', async () => {
             await buildSystem.buildDebug();
@@ -88,9 +89,23 @@ async function activate(context) {
         context.subscriptions.push(vscode.commands.registerCommand('android.selectDevice', async () => {
             await deviceManager.selectDevice();
         }));
+        context.subscriptions.push(vscode.commands.registerCommand('android.selectDeviceFromTree', async (device) => {
+            // تحديد الجهاز مباشرة من Tree
+            if (device) {
+                deviceManager.getDevices().forEach(d => {
+                    if (d.id === device.id) {
+                        deviceManager['selectedDevice'] = d;
+                        deviceManager['onDidChangeDevicesEmitter'].fire();
+                    }
+                });
+                statusBar.update();
+                treeProvider.refresh();
+                vscode.window.showInformationMessage(`✅ Selected: ${device.id}`);
+            }
+        }));
         context.subscriptions.push(vscode.commands.registerCommand('android.refreshDevices', async () => {
             await deviceManager.refreshDevices();
-            deviceTreeProvider.refresh();
+            treeProvider.refresh();
             statusBar.update();
         }));
         // أوامر Logcat
