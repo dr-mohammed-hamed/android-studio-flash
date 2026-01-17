@@ -279,48 +279,87 @@ class LogcatManager {
         }
     }
     /**
-     * تنسيق سطر السجل (إضافة رموز تعبيرية فقط - بدون ANSI codes)
+     * تنسيق سطر السجل (احترافي مع highlighting للكلمات الهامة)
      */
     formatLogLine(line) {
         // تحليل نوع السجل من Logcat format
         // Format: 01-17 23:10:45.123 D/TagName(12345): Message
-        const logLevelMatch = line.match(/\s+([VDIWEF])\/([^(]+)\((\d+)\):\s+(.+)/);
+        const logLevelMatch = line.match(/(\d{2}-\d{2}\s+)?(\d{2}:\d{2}:\d{2}\.\d+)\s+([VDIWEF])\/([^(]+)\((\d+)\):\s+(.+)/);
         if (logLevelMatch) {
-            const [, level, tag, pid, message] = logLevelMatch;
-            const timestamp = line.split(level)[0].trim();
+            const [, , time, level, tag, pid, message] = logLevelMatch;
+            // اختصار الوقت (إزالة الميلي ثانية الزائدة)
+            const shortTime = time.substring(0, 12); // HH:MM:SS.mmm
             let icon = '○';
             let levelName = '';
             switch (level) {
                 case 'E': // Error
                     icon = '❌';
                     levelName = 'ERROR';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 case 'W': // Warning
                     icon = '⚠️';
                     levelName = 'WARN';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 case 'I': // Info
                     icon = 'ℹ️';
                     levelName = 'INFO';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 case 'D': // Debug
                     icon = '🔍';
                     levelName = 'DEBUG';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 case 'V': // Verbose
                     icon = '💬';
                     levelName = 'VERB';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 case 'F': // Fatal/Assert
                     icon = '💀';
                     levelName = 'FATAL';
-                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    break;
                 default:
                     return line;
             }
+            // تحسين: Highlight الكلمات الحرجة في الرسالة
+            const highlightedMessage = this.highlightCriticalWords(message);
+            // تحسين: كشف Stack Traces
+            const isStackTrace = message.trim().startsWith('at ') ||
+                message.includes('Exception') ||
+                message.includes('Error:');
+            const prefix = isStackTrace ? '  ↪ ' : '';
+            // تنسيق محسّن مع فواصل واضحة
+            const formattedLine = [
+                shortTime,
+                icon,
+                levelName.padEnd(5),
+                '│',
+                tag.trim().padEnd(25), // TAG كامل (25 حرف)
+                '│',
+                `(${pid.padStart(5)})`,
+                '│',
+                prefix + highlightedMessage
+            ].join(' ');
+            return formattedLine;
         }
         // إذا لم نستطع parse السطر، أرجعه كما هو
         return line;
+    }
+    /**
+     * تحسين: Highlight الكلمات الحرجة
+     */
+    highlightCriticalWords(message) {
+        // كلمات حرجة
+        const criticalWords = [
+            'crash', 'exception', 'error', 'fatal', 'killed',
+            'nullpointer', 'outofmemory', 'stackoverflow',
+            'failed', 'timeout', 'denied', 'forbidden'
+        ];
+        let highlighted = message;
+        // إضافة علامة ⚡ قبل الكلمات الحرجة
+        criticalWords.forEach(word => {
+            const regex = new RegExp(`\\b${word}\\b`, 'gi');
+            highlighted = highlighted.replace(regex, match => `⚡${match}⚡`);
+        });
+        return highlighted;
     }
     /**
      * مسح Logcat
