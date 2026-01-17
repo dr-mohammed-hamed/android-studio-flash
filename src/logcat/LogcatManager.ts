@@ -7,7 +7,7 @@ import { PackageNameDetector } from '../utils/PackageNameDetector';
 export type LogcatFilterMode = 'all' | 'app' | 'tag';
 
 export class LogcatManager {
-    private outputChannel: vscode.OutputChannel;
+    private outputChannel: vscode.LogOutputChannel;
     private logcatProcess: ChildProcess | null = null;
     private sdkManager: AndroidSDKManager;
     private isRunning: boolean = false;
@@ -17,7 +17,8 @@ export class LogcatManager {
     private useGrepFilter: boolean = false; // للتصفية في الكود إذا لم يعمل --pid
 
     constructor(private deviceManager: DeviceManager) {
-        this.outputChannel = vscode.window.createOutputChannel('Android Logcat');
+        // استخدام LogOutputChannel بدلاً من OutputChannel لدعم الألوان
+        this.outputChannel = vscode.window.createOutputChannel('Android Logcat', { log: true });
         this.sdkManager = new AndroidSDKManager();
     }
 
@@ -137,10 +138,10 @@ export class LogcatManager {
                         if (this.useGrepFilter && this.currentPackageName) {
                             // تصفية السطور التي تحتوي على package name
                             if (line.includes(this.currentPackageName)) {
-                                this.outputChannel.appendLine(this.formatLogLine(line));
+                                this.logFormattedLine(line);
                             }
                         } else {
-                            this.outputChannel.appendLine(this.formatLogLine(line));
+                            this.logFormattedLine(line);
                         }
                     }
                 });
@@ -267,21 +268,76 @@ export class LogcatManager {
     }
 
     /**
-     * تنسيق سطر السجل (إضافة ألوان حسب المستوى)
+     * طباعة سطر مع المستوى المناسب
+     */
+    private logFormattedLine(line: string): void {
+        const formattedLine = this.formatLogLine(line);
+        
+        // تحديد المستوى من السطر للاستخدام الصحيح للـ log methods
+        if (line.includes(' E/') || line.includes('ERROR')) {
+            this.outputChannel.error(formattedLine);
+        } else if (line.includes(' W/') || line.includes('WARNING')) {
+            this.outputChannel.warn(formattedLine);
+        } else if (line.includes(' I/') || line.includes('INFO')) {
+            this.outputChannel.info(formattedLine);
+        } else {
+            // DEBUG, VERBOSE, وغيرها
+            this.outputChannel.trace(formattedLine);
+        }
+    }
+
+    /**
+     * تنسيق سطر السجل (إضافة رموز تعبيرية فقط - بدون ANSI codes)
      */
     private formatLogLine(line: string): string {
-        if (line.includes(' E ') || line.includes('ERROR')) {
-            return `❌ ${line}`;
-        } else if (line.includes(' W ') || line.includes('WARNING')) {
-            return `⚠️  ${line}`;
-        } else if (line.includes(' I ') || line.includes('INFO')) {
-            return `ℹ️  ${line}`;
-        } else if (line.includes(' D ') || line.includes('DEBUG')) {
-            return `🔍 ${line}`;
-        } else if (line.includes(' V ') || line.includes('VERBOSE')) {
-            return `💬 ${line}`;
+        // تحليل نوع السجل من Logcat format
+        // Format: 01-17 23:10:45.123 D/TagName(12345): Message
+        const logLevelMatch = line.match(/\s+([VDIWEF])\/([^(]+)\((\d+)\):\s+(.+)/);
+        
+        if (logLevelMatch) {
+            const [, level, tag, pid, message] = logLevelMatch;
+            const timestamp = line.split(level)[0].trim();
+            
+            let icon = '○';
+            let levelName = '';
+            
+            switch (level) {
+                case 'E': // Error
+                    icon = '❌';
+                    levelName = 'ERROR';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                case 'W': // Warning
+                    icon = '⚠️';
+                    levelName = 'WARN';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                case 'I': // Info
+                    icon = 'ℹ️';
+                    levelName = 'INFO';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                case 'D': // Debug
+                    icon = '🔍';
+                    levelName = 'DEBUG';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                case 'V': // Verbose
+                    icon = '💬';
+                    levelName = 'VERB';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                case 'F': // Fatal/Assert
+                    icon = '💀';
+                    levelName = 'FATAL';
+                    return `${timestamp} ${icon} ${levelName.padEnd(5)} ${tag.trim().padEnd(20)} (${pid}) ${message}`;
+                    
+                default:
+                    return line;
+            }
         }
         
+        // إذا لم نستطع parse السطر، أرجعه كما هو
         return line;
     }
 
