@@ -55,6 +55,8 @@ class DeviceManager {
             const lines = stdout.split('\n');
             for (const line of lines) {
                 if (line && !line.startsWith('List of devices') && line.trim()) {
+                    // مثال على السطر:
+                    // 5cda021f               device usb:1-1 product:RMX2061 model:RMX2061 device:RMX2061L1
                     const parts = line.split(/\s+/);
                     if (parts.length >= 2) {
                         const device = {
@@ -62,6 +64,20 @@ class DeviceManager {
                             type: parts[0].startsWith('emulator-') ? 'emulator' : 'device',
                             state: parts[1]
                         };
+                        // استخراج معلومات إضافية من باقي السطر
+                        // البحث عن: model:xxx product:xxx device:xxx
+                        const modelMatch = line.match(/model:([^\s]+)/);
+                        const productMatch = line.match(/product:([^\s]+)/);
+                        const deviceMatch = line.match(/device:([^\s]+)/);
+                        if (modelMatch) {
+                            device.model = modelMatch[1].replace(/_/g, ' '); // استبدال _ بمسافات
+                        }
+                        if (productMatch) {
+                            device.product = productMatch[1];
+                        }
+                        if (deviceMatch) {
+                            device.device = deviceMatch[1];
+                        }
                         this.devices.push(device);
                     }
                 }
@@ -102,7 +118,9 @@ class DeviceManager {
     getDeviceDisplayName(device) {
         const icon = device.type === 'emulator' ? '📱' : '🔌';
         const status = device.state === 'online' || device.state === 'device' ? '🟢' : '🔴';
-        return `${status} ${icon} ${device.id}`;
+        // عرض اسم الجهاز الحقيقي (model أو product) بدلاً من ID
+        const name = device.model || device.product || device.device || device.id;
+        return `${status} ${icon} ${name}`;
     }
     async installApk(apkPath) {
         const device = this.selectedDevice;
