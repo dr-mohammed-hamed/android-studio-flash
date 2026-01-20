@@ -122,7 +122,17 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
 
     private getDeviceLabel(device: AndroidDevice, isSelected: boolean): string {
         const statusIcon = device.state === 'online' || device.state === 'device' ? '🟢' : '🔴';
-        const typeIcon = device.type === 'emulator' ? '📱' : '🔌';
+        
+        // تحديد نوع الأيقونة بناءً على نوع الجهاز
+        let typeIcon: string;
+        if (device.type === 'emulator') {
+            typeIcon = '📱'; // Emulator
+        } else if (device.id.includes(':')) {
+            typeIcon = '📡'; // Wireless device (contains port)
+        } else {
+            typeIcon = '🔌'; // USB device
+        }
+        
         const selectedMark = isSelected ? '✓ ' : '  ';
         const name = device.model || device.product || device.id.substring(0, 15);
         

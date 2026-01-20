@@ -106,8 +106,26 @@ export class TcpIpConnector {
     /**
      * تفعيل وضع TCP/IP على الجهاز
      */
+    /**
+     * تفعيل وضع TCP/IP على الجهاز
+     */
     private async enableTcpIpMode(deviceId: string, port: number = 5555): Promise<void> {
         try {
+            // ✅ FIX: الحصول على IP **قبل** تفعيل TCP/IP mode
+            // لأن الجهاز سيختفي من USB بعد التنفيذ!
+            const deviceIp = await this.getDeviceIp(deviceId);
+
+            if (!deviceIp) {
+                vscode.window.showWarningMessage(
+                    '⚠️ لم نتمكن من الحصول على IP الجهاز.\n' +
+                    'تأكد من أن الجهاز متصل بـ WiFi وحاول مرة أخرى.'
+                );
+                // محاولة الاتصال اليدوي
+                await this.connectToExistingDevice(port);
+                return;
+            }
+
+            // الآن نفعّل TCP/IP mode
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: '🔄 جارِ تفعيل TCP/IP mode...',
@@ -117,17 +135,8 @@ export class TcpIpConnector {
                 await execAsync(`"${this.adbPath}" -s ${deviceId} tcpip ${port}`);
             });
 
-            // الخطوة 4: الحصول على IP الجهاز
-            const deviceIp = await this.getDeviceIp(deviceId);
-
-            if (!deviceIp) {
-                vscode.window.showWarningMessage(
-                    '⚠️ لم نتمكن من الحصول على IP الجهاز تلقائياً.\n' +
-                    'يرجى إدخاله يدوياً.'
-                );
-                await this.connectToExistingDevice(port);
-                return;
-            }
+            // انتظر قليلاً بعد التفعيل
+            await this.sleep(1500);
 
             // ✨ التحسين: عرض IP الجهاز بوضوح قبل فصل الكابل
             const endpoint = `${deviceIp}:${port}`;
@@ -173,40 +182,30 @@ export class TcpIpConnector {
     }
 
     /**
-     * الحصول على IP الجهاز (مع إعادة محاولة)
+     * الحصول على IP الجهاز (بينما لا يزال متصلاً بـ USB)
      */
-    private async getDeviceIp(deviceId: string, retries: number = 3): Promise<string | null> {
-        // الانتظار قليلاً بعد تفعيل TCP/IP mode
-        // الجهاز يحتاج وقت لإعادة تشغيل خدمة ADB
-        await this.sleep(2000); // 2 ثانية
-        
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            try {
-                // محاولة الحصول على IP عبر WiFi
-                const { stdout } = await execAsync(
-                    `"${this.adbPath}" -s ${deviceId} shell ip addr show wlan0`,
-                    { timeout: 5000 } // timeout 5 ثواني
-                );
+    private async getDeviceIp(deviceId: string): Promise<string | null> {
+        try {
+            // محاولة الحصول على IP عبر WiFi
+            const { stdout } = await execAsync(
+                `"${this.adbPath}" -s ${deviceId} shell ip addr show wlan0`,
+                { timeout: 5000 }
+            );
 
-                // البحث عن: inet 192.168.x.x/24
-                const match = stdout.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
-                if (match && match[1]) {
-                    console.log(`✅ Got device IP on attempt ${attempt}: ${match[1]}`);
-                    return match[1];
-                }
-                
-            } catch (error: any) {
-                console.log(`⚠️ Attempt ${attempt}/${retries} failed:`, error.message);
-                
-                if (attempt < retries) {
-                    // انتظر قبل المحاولة التالية
-                    await this.sleep(1500);
-                }
+            // البحث عن: inet 192.168.x.x/24
+            const match = stdout.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
+            if (match && match[1]) {
+                console.log(`✅ Got device IP: ${match[1]}`);
+                return match[1];
             }
-        }
+            
+            console.warn('⚠️ No IP found in wlan0 output');
+            return null;
 
-        console.error('Failed to get device IP after all attempts');
-        return null;
+        } catch (error: any) {
+            console.error('Failed to get device IP:', error.message);
+            return null;
+        }
     }
 
     /**
