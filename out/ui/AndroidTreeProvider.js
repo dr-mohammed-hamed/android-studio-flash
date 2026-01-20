@@ -104,9 +104,15 @@ class AndroidTreeProvider {
             ];
             // عرض الأجهزة المتصلة
             wirelessDevices.forEach(device => {
-                const item = new AndroidTreeItem(`📡 ${device.model || device.ipAddress}`, device.id, 'wireless-device');
+                // أيقونة نوع الاتصال
+                const typeIcon = device.connectionType === 'wireless-debug' ? '📡' : '🔌';
+                const label = `${typeIcon} ${device.model || device.ipAddress}`;
+                const description = `${device.ipAddress}:${device.port} (${device.connectionType})`;
+                const item = new AndroidTreeItem(label, device.id, 'wireless-device');
                 item.device = device;
                 item.contextValue = 'wirelessDevice';
+                item.description = description;
+                item.tooltip = `${device.connectionType === 'wireless-debug' ? 'Wireless Debugging' : 'TCP/IP'}\n${device.ipAddress}:${device.port}`;
                 items.push(item);
             });
             if (wirelessDevices.length === 0) {

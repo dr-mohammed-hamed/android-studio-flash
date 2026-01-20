@@ -71,9 +71,22 @@ export class DeviceManager {
                 this.selectedDevice = this.devices[0];
             }
 
+
             this.onDidChangeDevicesEmitter.fire();
-        } catch(error) {
+        } catch(error: any) {
+            console.error('❌ Failed to refresh devices:', error);
+            console.error('Error details:', error.message);
+            
             this.devices = [];
+            
+            // إشعار المستخدم بالخطأ
+            vscode.window.showErrorMessage(
+                `❌ فشل تحديث الأجهزة: ${error.message}\n\n` +
+                'الأسباب المحتملة:\n' +
+                '• Android SDK غير مثبت أو غير مُكتشف\n' +
+                '• ADB غير موجود في platform-tools\n' +
+                '• الجهاز غير موصول أو USB Debugging غير مُفعّل'
+            );
         }
     }
 

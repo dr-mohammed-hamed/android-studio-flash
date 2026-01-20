@@ -8,6 +8,16 @@ export interface WirelessDevice extends AndroidDevice {
     ipAddress: string;
     port: number;
     paired?: boolean;
+    lastConnected?: number; // timestamp
+}
+
+interface SavedWirelessDevice {
+    id: string;
+    ipAddress: string;
+    port: number;
+    connectionType: 'wireless-debug' | 'tcpip';
+    model?: string;
+    lastConnected: number;
 }
 
 export class WirelessADBManager {
@@ -16,8 +26,12 @@ export class WirelessADBManager {
     private wirelessDevices: WirelessDevice[] = [];
     private onDidChangeDevicesEmitter = new vscode.EventEmitter<void>();
     readonly onDidChangeDevices = this.onDidChangeDevicesEmitter.event;
+    private readonly STORAGE_KEY = 'android.wirelessDevices';
 
-    constructor(private adbPath: string) {
+    constructor(
+        private adbPath: string,
+        private context: vscode.ExtensionContext
+    ) {
         this.wirelessDebugger = new WirelessDebugger(adbPath);
         this.tcpIpConnector = new TcpIpConnector(adbPath);
     }
@@ -102,6 +116,165 @@ export class WirelessADBManager {
     }
 
     /**
+     * ═══════════════════════════════════════════════════════
+     *  PERSISTENCE SYSTEM
+     * ═══════════════════════════════════════════════════════
+     */
+
+    /**
+     * حفظ جميع الأجهزة اللاسلكية الحالية
+     */
+    private async saveWirelessDevices(): Promise<void> {
+        try {
+            const savedDevices: SavedWirelessDevice[] = this.wirelessDevices.map(device => ({
+                id: device.id,
+                ipAddress: device.ipAddress,
+                port: device.port,
+                connectionType: device.connectionType,
+                model: device.model,
+                lastConnected: Date.now()
+            }));
+
+            await this.context.globalState.update(this.STORAGE_KEY, savedDevices);
+            console.log(`💾 Saved ${savedDevices.length} wireless devices`);
+        } catch (error) {
+            console.error('Failed to save wireless devices:', error);
+        }
+    }
+
+    /**
+     * تحميل الأجهزة المحفوظة
+     */
+    private async loadWirelessDevices(): Promise<SavedWirelessDevice[]> {
+        try {
+            const saved = this.context.globalState.get<SavedWirelessDevice[]>(this.STORAGE_KEY, []);
+            console.log(`📂 Loaded ${saved.length} saved wireless devices`);
+            return saved;
+        } catch (error) {
+            console.error('Failed to load wireless devices:', error);
+            return [];
+        }
+    }
+
+    /**
+     * إضافة جهاز للقائمة المحفوظة
+     */
+    async addSavedDevice(device: WirelessDevice): Promise<void> {
+        try {
+            const saved = await this.loadWirelessDevices();
+            
+            // حذف النسخة القديمة إن وجدت
+            const filtered = saved.filter(d => d.id !== device.id);
+            
+            // إضافة الجهاز الجديد
+            filtered.push({
+                id: device.id,
+                ipAddress: device.ipAddress,
+                port: device.port,
+                connectionType: device.connectionType,
+                model: device.model,
+                lastConnected: Date.now()
+            });
+
+            await this.context.globalState.update(this.STORAGE_KEY, filtered);
+            console.log(`✅ Added device to saved list: ${device.id}`);
+        } catch (error) {
+            console.error('Failed to add saved device:', error);
+        }
+    }
+
+    /**
+     * حذف جهاز من القائمة المحفوظة
+     */
+    async removeSavedDevice(deviceId: string): Promise<void> {
+        try {
+            const saved = await this.loadWirelessDevices();
+            const filtered = saved.filter(d => d.id !== deviceId);
+            await this.context.globalState.update(this.STORAGE_KEY, filtered);
+            console.log(`🗑️ Removed device from saved list: ${deviceId}`);
+            
+            vscode.window.showInformationMessage(`✅ تم نسيان الجهاز: ${deviceId}`);
+        } catch (error) {
+            console.error('Failed to remove saved device:', error);
+        }
+    }
+
+    /**
+     * إعادة الاتصال التلقائي بالأجهزة المحفوظة
+     */
+    async autoReconnectSavedDevices(): Promise<void> {
+        const saved = await this.loadWirelessDevices();
+        
+        if (saved.length === 0) {
+            console.log('ℹ️ No saved wireless devices to reconnect');
+            return;
+        }
+
+        console.log(`🔄 Attempting to reconnect ${saved.length} saved devices...`);
+
+        // إعادة الاتصال بالتوازي (parallel)
+        const reconnectPromises = saved.map(device => 
+            this.attemptReconnect(device)
+        );
+
+        const results = await Promise.allSettled(reconnectPromises);
+        
+        const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
+        const failCount = results.length - successCount;
+
+        if (successCount > 0) {
+            console.log(`✅ Reconnected ${successCount} device(s)`);
+        }
+        if (failCount > 0) {
+            console.warn(`⚠️ Failed to reconnect ${failCount} device(s)`);
+        }
+
+        // تحديث الواجهة
+        this.onDidChangeDevicesEmitter.fire();
+    }
+
+    /**
+     * محاولة إعادة الاتصال بجهاز واحد
+     */
+    private async attemptReconnect(savedDevice: SavedWirelessDevice): Promise<boolean> {
+        const endpoint = `${savedDevice.ipAddress}:${savedDevice.port}`;
+        
+        try {
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+
+            // محاولة الاتصال مع timeout قصير
+            await execAsync(`"${this.adbPath}" connect ${endpoint}`, { 
+                timeout: 5000 
+            });
+
+            console.log(`✅ Reconnected: ${endpoint}`);
+            return true;
+
+        } catch (error: any) {
+            console.warn(`⚠️ Failed to reconnect ${endpoint}: ${error.message}`);
+            return false;
+        }
+    }
+
+    /**
+     * اكتشاف نوع الاتصال بناءً على رقم Port
+     */
+    private detectConnectionType(port: number): 'wireless-debug' | 'tcpip' {
+        // Port 5555 هو الافتراضي لـ TCP/IP
+        // Ports أعلى من 30000 عادة تكون Wireless Debugging
+        return port === 5555 ? 'tcpip' : 'wireless-debug';
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════
+     *  DEVICE MANAGEMENT
+     * ═══════════════════════════════════════════════════════
+     */
+
+
+    /**
      * قطع اتصال جهاز لاسلكي
      */
     async disconnectDevice(device: WirelessDevice): Promise<void> {
@@ -159,19 +332,26 @@ export class WirelessADBManager {
                             const productMatch = line.match(/product:([^\s]+)/);
                             const deviceMatch = line.match(/device:([^\s]+)/);
                             
+                            const portNumber = parseInt(port);
                             const device: WirelessDevice = {
                                 id: endpoint,
                                 type: 'device',
                                 state: parts[1] as any,
-                                connectionType: 'tcpip', // سنحدده لاحقاً
+                                connectionType: this.detectConnectionType(portNumber), // ✅ استخدام اكتشاف تلقائي
                                 ipAddress: ip,
-                                port: parseInt(port),
+                                port: portNumber,
                                 model: modelMatch ? modelMatch[1].replace(/_/g, ' ') : undefined,
                                 product: productMatch ? productMatch[1] : undefined,
-                                device: deviceMatch ? deviceMatch[1] : undefined
+                                device: deviceMatch ? deviceMatch[1] : undefined,
+                                lastConnected: Date.now()
                             };
                             
                             this.wirelessDevices.push(device);
+
+                            // ✅ حفظ الجهاز تلقائيًا إذا كان متصلاً
+                            if (device.state === 'device') {
+                                await this.addSavedDevice(device);
+                            }
                         }
                     }
                 }

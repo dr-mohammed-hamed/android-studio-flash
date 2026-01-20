@@ -25,7 +25,7 @@ export async function activate(context: vscode.ExtensionContext) {
         deviceManager = new DeviceManager();
         buildSystem = new BuildSystem(gradleService, deviceManager);
         logcatManager = new LogcatManager(deviceManager);
-        wirelessManager = new WirelessADBManager(sdkManager.getADBPath());
+        wirelessManager = new WirelessADBManager(sdkManager.getADBPath(), context);
 
         // تهيئة واجهة المستخدم
         statusBar = new BuildStatusBar(deviceManager);
@@ -160,7 +160,41 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
+        // أمر تشخيص المشاكل
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.runDiagnostics', async () => {
+                const { runDiagnostics } = require('./utils/diagnostics');
+                await runDiagnostics(context);
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.forgetWirelessDevice', async (device) => {
+                if (device && device.id) {
+                    await wirelessManager.removeSavedDevice(device.id);
+                    await deviceManager.refreshDevices();
+                    treeProvider.refresh();
+                }
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.reconnectWirelessDevice', async (device) => {
+                if (device && device.ipAddress && device.port) {
+                    const endpoint = `${device.ipAddress}:${device.port}`;
+                    vscode.window.showInformationMessage(`🔄 إعادة الاتصال بـ ${endpoint}...`);
+                    // سيتم معالجتها بواسطة attemptReconnect داخلياً
+                    await wirelessManager.autoReconnectSavedDevices();
+                    await deviceManager.refreshDevices();
+                    treeProvider.refresh();
+                }
+            })
+        );
+
         // تحديث أولي للأجهزة
+        // ✅ Auto-reconnect للأجهزة اللاسلكية المحفوظة
+        await wirelessManager.autoReconnectSavedDevices();
+        
         await deviceManager.refreshDevices();
         statusBar.update();
 

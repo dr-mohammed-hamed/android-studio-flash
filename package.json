@@ -100,6 +100,36 @@
         "command": "android.clearLogcat",
         "title": "🗑️ Clear Logcat",
         "category": "Android"
+      },
+      {
+        "command": "android.forgetWirelessDevice",
+        "title": "🗑️ Forget Wireless Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.reconnectWirelessDevice",
+        "title": "🔄 Reconnect Wireless Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.runDiagnostics",
+        "title": "🔍 Run Diagnostics",
+        "category": "Android"
+      },
+      {
+        "command": "android.setupWireless",
+        "title": "➕ Setup Wireless Connection",
+        "category": "Android"
+      },
+      {
+        "command": "android.disconnectWireless",
+        "title": "❌ Disconnect Wireless Device",
+        "category": "Android"
+      },
+      {
+        "command": "android.refreshWireless",
+        "title": "🔄 Refresh Wireless Devices",
+        "category": "Android"
       }
     ],
     "viewsContainers": {
@@ -126,6 +156,23 @@
           "command": "android.refreshDevices",
           "when": "view == androidDevices",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "android.forgetWirelessDevice",
+          "when": "view == androidPanel && viewItem == wirelessDevice",
+          "group": "wireless@1"
+        },
+        {
+          "command": "android.reconnectWirelessDevice",
+          "when": "view == androidPanel && viewItem == wirelessDevice",
+          "group": "wireless@2"
+        },
+        {
+          "command": "android.disconnectWireless",
+          "when": "view == androidPanel && viewItem == wirelessDevice",
+          "group": "wireless@3"
         }
       ],
       "commandPalette": [

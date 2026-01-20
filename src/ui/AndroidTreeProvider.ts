@@ -90,13 +90,20 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
 
             // عرض الأجهزة المتصلة
             wirelessDevices.forEach(device => {
+                // أيقونة نوع الاتصال
+                const typeIcon = device.connectionType === 'wireless-debug' ? '📡' : '🔌';
+                const label = `${typeIcon} ${device.model || device.ipAddress}`;
+                const description = `${device.ipAddress}:${device.port} (${device.connectionType})`;
+                
                 const item = new AndroidTreeItem(
-                    `📡 ${device.model || device.ipAddress}`,
+                    label,
                     device.id,
                     'wireless-device'
                 );
                 item.device = device;
                 item.contextValue = 'wirelessDevice';
+                item.description = description;
+                item.tooltip = `${device.connectionType === 'wireless-debug' ? 'Wireless Debugging' : 'TCP/IP'}\n${device.ipAddress}:${device.port}`;
                 items.push(item);
             });
 
