@@ -36,10 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AndroidTreeProvider = void 0;
 const vscode = __importStar(require("vscode"));
 class AndroidTreeProvider {
-    constructor(deviceManager, buildSystem, logcatManager) {
+    constructor(deviceManager, buildSystem, logcatManager, wirelessManager) {
         this.deviceManager = deviceManager;
         this.buildSystem = buildSystem;
         this.logcatManager = logcatManager;
+        this.wirelessManager = wirelessManager;
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.deviceManager.onDidChangeDevices(() => {
@@ -60,6 +61,8 @@ class AndroidTreeProvider {
                 new AndroidTreeItem('🔨 Build Actions', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 // قسم الأجهزة
                 new AndroidTreeItem('📱 Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
+                // قسم الأجهزة اللاسلكية
+                new AndroidTreeItem('📡 Wireless Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 // قسم Tools
                 new AndroidTreeItem('🛠️ Tools', '', 'header', vscode.TreeItemCollapsibleState.Expanded)
             ];
@@ -92,6 +95,24 @@ class AndroidTreeProvider {
                 };
                 return item;
             });
+        }
+        if (element.label === '📡 Wireless Devices') {
+            const wirelessDevices = this.wirelessManager.getWirelessDevices();
+            const items = [
+                // زر إضافة جهاز جديد
+                new AndroidTreeItem('➕ Add Wireless Device', 'android.setupWireless', 'action')
+            ];
+            // عرض الأجهزة المتصلة
+            wirelessDevices.forEach(device => {
+                const item = new AndroidTreeItem(`📡 ${device.model || device.ipAddress}`, device.id, 'wireless-device');
+                item.device = device;
+                item.contextValue = 'wirelessDevice';
+                items.push(item);
+            });
+            if (wirelessDevices.length === 0) {
+                items.push(new AndroidTreeItem('⚠️ No wireless devices', '', 'empty'));
+            }
+            return items;
         }
         if (element.label === '🛠️ Tools') {
             return [

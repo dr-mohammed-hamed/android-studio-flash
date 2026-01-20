@@ -6,12 +6,14 @@ import { AndroidTreeProvider } from './ui/AndroidTreeProvider';
 import { BuildSystem } from './build/BuildSystem';
 import { BuildStatusBar } from './ui/BuildStatusBar';
 import { LogcatManager } from './logcat/LogcatManager';
+import { WirelessADBManager } from './wireless/WirelessADBManager';
 
 let deviceManager: DeviceManager;
 let buildSystem: BuildSystem;
 let statusBar: BuildStatusBar;
 let logcatManager: LogcatManager;
 let treeProvider: AndroidTreeProvider;
+let wirelessManager: WirelessADBManager;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Android Studio Lite is now active!');
@@ -23,10 +25,11 @@ export async function activate(context: vscode.ExtensionContext) {
         deviceManager = new DeviceManager();
         buildSystem = new BuildSystem(gradleService, deviceManager);
         logcatManager = new LogcatManager(deviceManager);
+        wirelessManager = new WirelessADBManager(sdkManager.getADBPath());
 
         // تهيئة واجهة المستخدم
         statusBar = new BuildStatusBar(deviceManager);
-        treeProvider = new AndroidTreeProvider(deviceManager, buildSystem, logcatManager);
+        treeProvider = new AndroidTreeProvider(deviceManager, buildSystem, logcatManager, wirelessManager);
 
         // تسجيل Tree View
         vscode.window.registerTreeDataProvider('androidPanel', treeProvider);
@@ -133,6 +136,30 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
+        // أوامر Wireless ADB
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.setupWireless', async () => {
+                await wirelessManager.setupWirelessConnection();
+                treeProvider.refresh();
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.disconnectWireless', async (device) => {
+                if (device) {
+                    await wirelessManager.disconnectDevice(device);
+                    treeProvider.refresh();
+                }
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.refreshWireless', async () => {
+                await wirelessManager.refreshWirelessDevices();
+                treeProvider.refresh();
+            })
+        );
+
         // تحديث أولي للأجهزة
         await deviceManager.refreshDevices();
         statusBar.update();
@@ -155,5 +182,9 @@ export function deactivate() {
     
     if (statusBar) {
         statusBar.dispose();
+    }
+    
+    if (wirelessManager) {
+        wirelessManager.dispose();
     }
 }
