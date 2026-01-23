@@ -3,6 +3,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
+/**
+ * Manages Android SDK detection and path resolution.
+ * Automatically detects SDK location from settings, environment variables, or default paths.
+ */
 export class AndroidSDKManager {
     private sdkPath: string = '';
 
@@ -11,10 +15,10 @@ export class AndroidSDKManager {
     }
 
     /**
-     * اكتشاف مسار Android SDK تلقائياً
+     * Automatically detect Android SDK path
      */
     private detectSDK(): void {
-        // محاولة الحصول من الإعدادات أولاً
+        // First, try to get from settings
         const config = vscode.workspace.getConfiguration('android');
         const configuredPath = config.get<string>('sdkPath');
 
@@ -24,7 +28,7 @@ export class AndroidSDKManager {
             return;
         }
 
-        // محاولة الحصول من متغيرات البيئة
+        // Try to get from environment variables
         const envPath = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
         if (envPath && fs.existsSync(envPath)) {
             this.sdkPath = envPath;
@@ -32,7 +36,7 @@ export class AndroidSDKManager {
             return;
         }
 
-        // المسارات الافتراضية حسب نظام التشغيل
+        // Default paths based on operating system
         const defaultPaths = this.getDefaultSDKPaths();
         for (const defaultPath of defaultPaths) {
             if (fs.existsSync(defaultPath)) {
@@ -46,7 +50,7 @@ export class AndroidSDKManager {
     }
 
     /**
-     * الحصول على المسارات الافتراضية للـ SDK حسب نظام التشغيل
+     * Get default SDK paths based on operating system
      */
     private getDefaultSDKPaths(): string[] {
         const homeDir = os.homedir();
@@ -72,14 +76,14 @@ export class AndroidSDKManager {
     }
 
     /**
-     * الحصول على مسار SDK
+     * Get SDK path
      */
     getSDKPath(): string {
         return this.sdkPath;
     }
 
     /**
-     * الحصول على مسار ADB
+     * Get ADB executable path
      */
     getADBPath(): string {
         if (!this.sdkPath) {
@@ -97,7 +101,7 @@ export class AndroidSDKManager {
     }
 
     /**
-     * الحصول على مسار AVD Manager
+     * Get AVD Manager path
      */
     getAVDManagerPath(): string {
         if (!this.sdkPath) {
@@ -111,7 +115,7 @@ export class AndroidSDKManager {
     }
 
     /**
-     * الحصول على مسار Emulator
+     * Get Emulator executable path
      */
     getEmulatorPath(): string {
         if (!this.sdkPath) {
@@ -125,16 +129,16 @@ export class AndroidSDKManager {
     }
 
     /**
-     * التحقق من أن SDK مثبت بشكل صحيح
+     * Verify SDK is properly installed
      */
     async verifySDK(): Promise<boolean> {
         if (!this.sdkPath) {
-            vscode.window.showErrorMessage('❌ Android SDK غير موجود. يرجى تحديد المسار في الإعدادات.');
+            vscode.window.showErrorMessage('❌ Android SDK not found. Please set the path in Settings.');
             return false;
         }
 
         try {
-            this.getADBPath(); // سيرمي خطأ إذا لم يكن موجوداً
+            this.getADBPath(); // Will throw if not found
             return true;
         } catch (error) {
             vscode.window.showErrorMessage(`❌ ${error}`);
@@ -143,14 +147,14 @@ export class AndroidSDKManager {
     }
 
     /**
-     * فتح إعدادات SDK
+     * Prompt user to select SDK path
      */
     async promptForSDKPath(): Promise<void> {
         const uri = await vscode.window.showOpenDialog({
             canSelectFiles: false,
             canSelectFolders: true,
             canSelectMany: false,
-            title: 'اختر مجلد Android SDK'
+            title: 'Select Android SDK folder'
         });
 
         if (uri && uri[0]) {
@@ -158,7 +162,7 @@ export class AndroidSDKManager {
             const config = vscode.workspace.getConfiguration('android');
             await config.update('sdkPath', selectedPath, vscode.ConfigurationTarget.Global);
             this.sdkPath = selectedPath;
-            vscode.window.showInformationMessage('✅ تم تحديث مسار SDK بنجاح!');
+            vscode.window.showInformationMessage('✅ SDK path updated successfully!');
         }
     }
 }

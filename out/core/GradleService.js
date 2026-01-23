@@ -41,12 +41,15 @@ const os = __importStar(require("os"));
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
+/**
+ * Service for executing Gradle tasks and managing Android project builds.
+ */
 class GradleService {
     constructor() {
         this.outputChannel = vscode.window.createOutputChannel('Gradle');
     }
     /**
-     * الحصول على مسار Gradle Wrapper
+     * Get Gradle Wrapper path
      */
     getGradlewPath() {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -62,7 +65,7 @@ class GradleService {
         return gradlewPath;
     }
     /**
-     * تنفيذ أمر Gradle
+     * Execute a Gradle task
      */
     async executeGradleTask(task, showOutput = true) {
         try {
@@ -73,7 +76,7 @@ class GradleService {
                 this.outputChannel.appendLine(`🔨 Executing: ${task}`);
                 this.outputChannel.appendLine('━'.repeat(50));
             }
-            // تنفيذ الأمر
+            // Execute command
             const { stdout, stderr } = await execAsync(`"${gradlew}" ${task}`, {
                 cwd: workspaceFolder,
                 maxBuffer: 10 * 1024 * 1024 // 10MB buffer
@@ -105,7 +108,7 @@ class GradleService {
         }
     }
     /**
-     * بناء Debug APK
+     * Build Debug APK
      */
     async buildDebug() {
         return await vscode.window.withProgress({
@@ -117,7 +120,7 @@ class GradleService {
         });
     }
     /**
-     * بناء Release APK
+     * Build Release APK
      */
     async buildRelease() {
         return await vscode.window.withProgress({
@@ -129,7 +132,7 @@ class GradleService {
         });
     }
     /**
-     * تنظيف المشروع
+     * Clean project
      */
     async clean() {
         return await vscode.window.withProgress({
@@ -141,7 +144,7 @@ class GradleService {
         });
     }
     /**
-     * مزامنة Gradle
+     * Sync Gradle
      */
     async syncGradle() {
         await vscode.window.withProgress({
@@ -150,7 +153,7 @@ class GradleService {
             cancellable: false
         }, async () => {
             try {
-                // تنفيذ tasks لمزامنة المشروع
+                // Execute tasks to sync project
                 await this.executeGradleTask('tasks', false);
                 vscode.window.showInformationMessage('✅ Gradle sync completed!');
             }
@@ -161,7 +164,7 @@ class GradleService {
         });
     }
     /**
-     * الحصول على مسار APK المبني
+     * Get built APK path
      */
     getApkPath(variant = 'debug') {
         const workspaceFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
@@ -169,7 +172,7 @@ class GradleService {
         return apkPath;
     }
     /**
-     * التحقق من وجود ملف build.gradle
+     * Check if current workspace is an Android project
      */
     isAndroidProject() {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];

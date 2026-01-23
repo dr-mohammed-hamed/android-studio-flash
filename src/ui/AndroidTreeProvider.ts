@@ -6,6 +6,9 @@ import { WirelessADBManager } from '../wireless/WirelessADBManager';
 
 type TreeItemType = 'header' | 'device' | 'action' | 'empty' | 'wireless-device';
 
+/**
+ * Tree data provider for the Android Control Panel in the sidebar.
+ */
 export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<AndroidTreeItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -31,23 +34,23 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
 
     async getChildren(element?: AndroidTreeItem): Promise<AndroidTreeItem[]> {
         if (!element) {
-            // العناصر الجذرية
+            // Root elements
             return [
-                // قسم Build Actions
+                // Build Actions section
                 new AndroidTreeItem('🔨 Build Actions', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
-                // قسم الأجهزة
+                // Devices section
                 new AndroidTreeItem('📱 Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
-                // قسم الأجهزة اللاسلكية
+                // Wireless Devices section
                 new AndroidTreeItem('📡 Wireless Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
-                // قسم Tools
+                // Tools section
                 new AndroidTreeItem('🛠️ Tools', '', 'header', vscode.TreeItemCollapsibleState.Expanded)
             ];
         }
 
-        // الأبناء حسب القسم
+        // Children based on section
         if (element.label === '🔨 Build Actions') {
             return [
                 new AndroidTreeItem('▶️  Build & Run', 'android.runApp', 'action'),
@@ -84,13 +87,13 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
             const wirelessDevices = this.wirelessManager.getWirelessDevices();
             
             const items: AndroidTreeItem[] = [
-                // زر إضافة جهاز جديد
+                // Add new device button
                 new AndroidTreeItem('➕ Add Wireless Device', 'android.setupWireless', 'action')
             ];
 
-            // عرض الأجهزة المتصلة
+            // Show connected devices
             wirelessDevices.forEach(device => {
-                // أيقونة نوع الاتصال
+                // Connection type icon
                 const typeIcon = device.connectionType === 'wireless-debug' ? '📡' : '🔌';
                 const label = `${typeIcon} ${device.model || device.ipAddress}`;
                 const description = `${device.ipAddress}:${device.port} (${device.connectionType})`;
@@ -127,10 +130,13 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
         return [];
     }
 
+    /**
+     * Get device label with status and type icons
+     */
     private getDeviceLabel(device: AndroidDevice, isSelected: boolean): string {
         const statusIcon = device.state === 'online' || device.state === 'device' ? '🟢' : '🔴';
         
-        // تحديد نوع الأيقونة بناءً على نوع الجهاز
+        // Determine type icon based on device type
         let typeIcon: string;
         if (device.type === 'emulator') {
             typeIcon = '📱'; // Emulator
@@ -147,6 +153,9 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
     }
 }
 
+/**
+ * Tree item for the Android Control Panel
+ */
 class AndroidTreeItem extends vscode.TreeItem {
     public device?: AndroidDevice;
 

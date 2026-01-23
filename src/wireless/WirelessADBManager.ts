@@ -1,8 +1,15 @@
 import * as vscode from 'vscode';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { WirelessDebugger } from './WirelessDebugger';
 import { TcpIpConnector } from './TcpIpConnector';
 import { AndroidDevice } from '../devices/DeviceManager';
 
+const execAsync = promisify(exec);
+
+/**
+ * Represents a wirelessly connected Android device
+ */
 export interface WirelessDevice extends AndroidDevice {
     connectionType: 'wireless-debug' | 'tcpip';
     ipAddress: string;
@@ -11,6 +18,9 @@ export interface WirelessDevice extends AndroidDevice {
     lastConnected?: number; // timestamp
 }
 
+/**
+ * Saved wireless device configuration for persistence
+ */
 interface SavedWirelessDevice {
     id: string;
     ipAddress: string;
@@ -20,6 +30,9 @@ interface SavedWirelessDevice {
     lastConnected: number;
 }
 
+/**
+ * Manages wireless ADB connections including Wireless Debugging (Android 11+) and TCP/IP.
+ */
 export class WirelessADBManager {
     private wirelessDebugger: WirelessDebugger;
     private tcpIpConnector: TcpIpConnector;
@@ -37,10 +50,10 @@ export class WirelessADBManager {
     }
 
     /**
-     * فتح واجهة إعداد التوصيل اللاسلكي
+     * Open wireless connection setup UI
      */
     async setupWirelessConnection(): Promise<void> {
-        // عرض Quick Pick لاختيار الطريقة
+        // Show Quick Pick to select method
         const method = await this.promptConnectionMethod();
         
         if (!method) {
@@ -58,33 +71,33 @@ export class WirelessADBManager {
     }
 
     /**
-     * اختيار طريقة التوصيل
+     * Prompt user to select connection method
      */
     private async promptConnectionMethod(): Promise<'wireless-debug' | 'tcpip' | null> {
         const items = [
             {
                 label: '$(radio-tower) Wireless Debugging',
-                description: 'Android 11+ - الأسهل',
-                detail: 'استخدام QR Code أو Pairing Code',
+                description: 'Android 11+ - Easiest',
+                detail: 'Use QR Code or Pairing Code',
                 method: 'wireless-debug' as const
             },
             {
                 label: '$(plug) ADB over TCP/IP',
-                description: 'Android 4.0+ - يحتاج USB لمرة واحدة',
-                detail: 'للأجهزة القديمة',
+                description: 'Android 4.0+ - Requires USB once',
+                detail: 'For older devices',
                 method: 'tcpip' as const
             }
         ];
 
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'اختر طريقة التوصيل اللاسلكي'
+            placeHolder: 'Select wireless connection method'
         });
 
         return selected?.method || null;
     }
 
     /**
-     * إعداد Wireless Debugging (Android 11+)
+     * Setup Wireless Debugging (Android 11+)
      */
     private async setupWirelessDebugging(): Promise<void> {
         const pairingMethod = await this.wirelessDebugger.promptPairingMethod();
@@ -97,21 +110,21 @@ export class WirelessADBManager {
             await this.wirelessDebugger.pairWithCode();
         } else {
             vscode.window.showInformationMessage(
-                '⚠️ QR Code pairing سيتم إضافته قريباً. استخدم Pairing Code حالياً.'
+                '⚠️ QR Code pairing will be added soon. Use Pairing Code for now.'
             );
         }
 
-        // تحديث قائمة الأجهزة
+        // Update device list
         this.onDidChangeDevicesEmitter.fire();
     }
 
     /**
-     * إعداد ADB over TCP/IP
+     * Setup ADB over TCP/IP
      */
     private async setupTcpIp(): Promise<void> {
         await this.tcpIpConnector.setupConnection();
         
-        // تحديث قائمة الأجهزة
+        // Update device list
         this.onDidChangeDevicesEmitter.fire();
     }
 
@@ -122,7 +135,7 @@ export class WirelessADBManager {
      */
 
     /**
-     * حفظ جميع الأجهزة اللاسلكية الحالية
+     * Save all current wireless devices
      */
     private async saveWirelessDevices(): Promise<void> {
         try {
@@ -143,7 +156,7 @@ export class WirelessADBManager {
     }
 
     /**
-     * تحميل الأجهزة المحفوظة
+     * Load saved devices from storage
      */
     private async loadWirelessDevices(): Promise<SavedWirelessDevice[]> {
         try {
@@ -157,16 +170,16 @@ export class WirelessADBManager {
     }
 
     /**
-     * إضافة جهاز للقائمة المحفوظة
+     * Add device to saved list
      */
     async addSavedDevice(device: WirelessDevice): Promise<void> {
         try {
             const saved = await this.loadWirelessDevices();
             
-            // حذف النسخة القديمة إن وجدت
+            // Remove old version if exists
             const filtered = saved.filter(d => d.id !== device.id);
             
-            // إضافة الجهاز الجديد
+            // Add new device
             filtered.push({
                 id: device.id,
                 ipAddress: device.ipAddress,
@@ -184,7 +197,7 @@ export class WirelessADBManager {
     }
 
     /**
-     * حذف جهاز من القائمة المحفوظة
+     * Remove device from saved list
      */
     async removeSavedDevice(deviceId: string): Promise<void> {
         try {
@@ -193,14 +206,14 @@ export class WirelessADBManager {
             await this.context.globalState.update(this.STORAGE_KEY, filtered);
             console.log(`🗑️ Removed device from saved list: ${deviceId}`);
             
-            vscode.window.showInformationMessage(`✅ تم نسيان الجهاز: ${deviceId}`);
+            vscode.window.showInformationMessage(`✅ Device forgotten: ${deviceId}`);
         } catch (error) {
             console.error('Failed to remove saved device:', error);
         }
     }
 
     /**
-     * إعادة الاتصال التلقائي بالأجهزة المحفوظة
+     * Auto-reconnect to saved devices on startup
      */
     async autoReconnectSavedDevices(): Promise<void> {
         const saved = await this.loadWirelessDevices();
@@ -212,7 +225,7 @@ export class WirelessADBManager {
 
         console.log(`🔄 Attempting to reconnect ${saved.length} saved devices...`);
 
-        // إعادة الاتصال بالتوازي (parallel)
+        // Reconnect in parallel
         const reconnectPromises = saved.map(device => 
             this.attemptReconnect(device)
         );
@@ -229,22 +242,18 @@ export class WirelessADBManager {
             console.warn(`⚠️ Failed to reconnect ${failCount} device(s)`);
         }
 
-        // تحديث الواجهة
+        // Update UI
         this.onDidChangeDevicesEmitter.fire();
     }
 
     /**
-     * محاولة إعادة الاتصال بجهاز واحد
+     * Attempt to reconnect a single device
      */
     private async attemptReconnect(savedDevice: SavedWirelessDevice): Promise<boolean> {
         const endpoint = `${savedDevice.ipAddress}:${savedDevice.port}`;
         
         try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-
-            // محاولة الاتصال مع timeout قصير
+            // Attempt connection with short timeout
             await execAsync(`"${this.adbPath}" connect ${endpoint}`, { 
                 timeout: 5000 
             });
@@ -259,11 +268,11 @@ export class WirelessADBManager {
     }
 
     /**
-     * اكتشاف نوع الاتصال بناءً على رقم Port
+     * Detect connection type based on port number
      */
     private detectConnectionType(port: number): 'wireless-debug' | 'tcpip' {
-        // Port 5555 هو الافتراضي لـ TCP/IP
-        // Ports أعلى من 30000 عادة تكون Wireless Debugging
+        // Port 5555 is default for TCP/IP
+        // Ports above 30000 are usually Wireless Debugging
         return port === 5555 ? 'tcpip' : 'wireless-debug';
     }
 
@@ -275,44 +284,36 @@ export class WirelessADBManager {
 
 
     /**
-     * قطع اتصال جهاز لاسلكي
+     * Disconnect a wireless device
      */
     async disconnectDevice(device: WirelessDevice): Promise<void> {
         const endpoint = `${device.ipAddress}:${device.port}`;
         
         try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-            
             await execAsync(`"${this.adbPath}" disconnect ${endpoint}`);
             
-            // إزالة من القائمة
+            // Remove from list
             this.wirelessDevices = this.wirelessDevices.filter(d => d.id !== device.id);
             
-            vscode.window.showInformationMessage(`✅ تم قطع الاتصال: ${device.model || endpoint}`);
+            vscode.window.showInformationMessage(`✅ Disconnected: ${device.model || endpoint}`);
             this.onDidChangeDevicesEmitter.fire();
         } catch (error: any) {
-            vscode.window.showErrorMessage(`❌ فشل قطع الاتصال: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Failed to disconnect: ${error.message}`);
         }
     }
 
     /**
-     * الحصول على الأجهزة اللاسلكية المتصلة
+     * Get list of connected wireless devices
      */
     getWirelessDevices(): WirelessDevice[] {
         return this.wirelessDevices;
     }
 
     /**
-     * تحديث قائمة الأجهزة اللاسلكية
+     * Refresh wireless device list
      */
     async refreshWirelessDevices(): Promise<void> {
         try {
-            const { exec } = require('child_process');
-            const { promisify } = require('util');
-            const execAsync = promisify(exec);
-            
             const { stdout } = await execAsync(`"${this.adbPath}" devices -l`);
             const lines = stdout.split('\n');
             
@@ -320,14 +321,14 @@ export class WirelessADBManager {
             
             for (const line of lines) {
                 if (line && !line.startsWith('List of devices') && line.trim()) {
-                    // البحث عن أجهزة لاسلكية (تحتوي على :)
+                    // Look for wireless devices (contain :)
                     if (line.includes(':')) {
                         const parts = line.split(/\s+/);
                         if (parts.length >= 2) {
                             const endpoint = parts[0];
                             const [ip, port] = endpoint.split(':');
                             
-                            // استخراج معلومات إضافية
+                            // Extract additional info
                             const modelMatch = line.match(/model:([^\s]+)/);
                             const productMatch = line.match(/product:([^\s]+)/);
                             const deviceMatch = line.match(/device:([^\s]+)/);
@@ -337,7 +338,7 @@ export class WirelessADBManager {
                                 id: endpoint,
                                 type: 'device',
                                 state: parts[1] as any,
-                                connectionType: this.detectConnectionType(portNumber), // ✅ استخدام اكتشاف تلقائي
+                                connectionType: this.detectConnectionType(portNumber), // Auto-detect
                                 ipAddress: ip,
                                 port: portNumber,
                                 model: modelMatch ? modelMatch[1].replace(/_/g, ' ') : undefined,
@@ -348,7 +349,7 @@ export class WirelessADBManager {
                             
                             this.wirelessDevices.push(device);
 
-                            // ✅ حفظ الجهاز تلقائيًا إذا كان متصلاً
+                            // Auto-save device if connected
                             if (device.state === 'device') {
                                 await this.addSavedDevice(device);
                             }

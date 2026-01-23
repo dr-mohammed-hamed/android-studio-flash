@@ -5,41 +5,47 @@ import * as vscode from 'vscode';
 
 const execAsync = promisify(exec);
 
+/**
+ * Represents a device found during network scan
+ */
 export interface ScannedDevice {
     ip: string;
     port: number;
     name?: string;
 }
 
+/**
+ * Scans the local network for Android devices with ADB enabled.
+ */
 export class NetworkScanner {
     constructor(private adbPath: string) {}
 
     /**
-     * مسح الشبكة المحلية للبحث عن أجهزة Android
+     * Scan local network for Android devices
      */
     async scanNetwork(): Promise<ScannedDevice[]> {
         const localIp = this.getLocalIp();
         if (!localIp) {
-            vscode.window.showErrorMessage('❌ لم نتمكن من تحديد IP المحلي');
+            vscode.window.showErrorMessage('❌ Could not determine local IP');
             return [];
         }
 
-        // استخراج Subnet (مثال: 192.168.1)
+        // Extract subnet (e.g., 192.168.1)
         const subnet = localIp.substring(0, localIp.lastIndexOf('.'));
 
         return await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: '🔍 جارِ مسح الشبكة...',
+            title: '🔍 Scanning network...',
             cancellable: true
         }, async (progress, token) => {
             const devices: ScannedDevice[] = [];
             const port = 5555; // Default ADB port
 
-            // مسح من .1 إلى .254 (مع تحسين السرعة)
-            // سنختبر فقط عينة من العناوين للسرعة
+            // Scan from .1 to .254 (with speed optimization)
+            // Testing only a sample of addresses for speed
             const ipsToTest: string[] = [];
             
-            // اختبار أولاً العناوين الشائعة
+            // Test common addresses first
             for (let i = 1; i <= 20; i++) {
                 ipsToTest.push(`${subnet}.${i}`);
             }
@@ -58,11 +64,11 @@ export class NetworkScanner {
 
                 tested++;
                 progress.report({ 
-                    message: `فحص ${ip}... (${tested}/${ipsToTest.length})`,
+                    message: `Checking ${ip}... (${tested}/${ipsToTest.length})`,
                     increment: (100 / ipsToTest.length)
                 });
 
-                // محاولة الاتصال (بدون timeout طويل)
+                // Attempt connection (without long timeout)
                 if (await this.testConnection(ip, port)) {
                     devices.push({ ip, port });
                 }
@@ -73,7 +79,7 @@ export class NetworkScanner {
     }
 
     /**
-     * الحصول على IP المحلي
+     * Get local IP address
      */
     private getLocalIp(): string | null {
         const interfaces = os.networkInterfaces();
@@ -85,7 +91,7 @@ export class NetworkScanner {
             }
 
             for (const alias of iface) {
-                // IPv4 وليس loopback
+                // IPv4 and not loopback
                 if (alias.family === 'IPv4' && !alias.internal) {
                     return alias.address;
                 }
@@ -96,25 +102,25 @@ export class NetworkScanner {
     }
 
     /**
-     * اختبار اتصال بـ IP:Port
+     * Test connection to IP:Port
      */
     private async testConnection(ip: string, port: number): Promise<boolean> {
         try {
             const endpoint = `${ip}:${port}`;
             
-            // محاولة اتصال سريعة مع timeout قصير
+            // Quick connection attempt with short timeout
             const { stdout } = await execAsync(
                 `"${this.adbPath}" connect ${endpoint}`,
-                { timeout: 1500 } // 1.5 seconds timeout فقط
+                { timeout: 1500 } // 1.5 seconds timeout only
             );
 
-            // إذا نجح الاتصال
+            // If connection succeeded
             if (stdout.includes('connected')) {
-                // قطع الاتصال فوراً (فقط للاختبار)
+                // Disconnect immediately (testing only)
                 try {
                     await execAsync(`"${this.adbPath}" disconnect ${endpoint}`, { timeout: 500 });
                 } catch (e) {
-                    // تجاهل أخطاء القطع
+                    // Ignore disconnect errors
                 }
                 return true;
             }
@@ -122,7 +128,7 @@ export class NetworkScanner {
             return false;
 
         } catch (error) {
-            // فشل الاتصال = الجهاز غير موجود
+            // Connection failed = device not found
             return false;
         }
     }

@@ -6,15 +6,22 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+/**
+ * Result of package name detection with source and confidence
+ */
 export interface PackageDetectionResult {
     packageName: string;
     source: 'apk' | 'foreground' | 'gradle' | 'manifest' | 'device';
     confidence: 'high' | 'medium' | 'low';
 }
 
+/**
+ * Smart package name detection from multiple sources.
+ * Prioritizes built APK, then Gradle, then foreground app.
+ */
 export class PackageNameDetector {
     /**
-     * 🎯 النظام الذكي: محاولة جميع الطرق بالترتيب (الأنسب للمطورين)
+     * Smart system: Try all methods in order (best for developers)
      */
     static async detectPackageNameSmart(
         adbPath?: string,
@@ -23,8 +30,8 @@ export class PackageNameDetector {
     ): Promise<PackageDetectionResult[]> {
         const results: PackageDetectionResult[] = [];
 
-        // 🥇 محاولة 1: من APK المبني (الأدق - دقة 100%)
-        // المطور يريد تصحيح التطبيق اللي بناه!
+        // Priority 1: From built APK (most accurate - 100%)
+        // Developer wants to debug the app they built!
         if (gradlePath) {
             const apkPackage = await this.getPackageFromBuiltApk(gradlePath);
             if (apkPackage) {
@@ -36,7 +43,7 @@ export class PackageNameDetector {
             }
         }
 
-        // 🥈 محاولة 2: من build.gradle مع Build Variants (جيد جداً)
+        // Priority 2: From build.gradle with Build Variants (very good)
         const gradlePackage = await this.detectPackageName();
         if (gradlePackage) {
             results.push({
@@ -46,12 +53,12 @@ export class PackageNameDetector {
             });
         }
 
-        // 🥉 محاولة 3: من التطبيق الأمامي على الجهاز (معلوماتي فقط)
-        // قد يكون مفيد، لكن ليس الأولوية للمطورين
+        // Priority 3: From foreground app on device (informational only)
+        // Can be useful, but not priority for developers
         if (adbPath && deviceId) {
             const foregroundPackage = await this.getForegroundPackage(adbPath, deviceId);
             if (foregroundPackage) {
-                // فقط إذا لم يكن موجود بالفعل في النتائج
+                // Only add if not already in results
                 if (!results.find(r => r.packageName === foregroundPackage)) {
                     results.push({
                         packageName: foregroundPackage,
@@ -62,7 +69,7 @@ export class PackageNameDetector {
             }
         }
 
-        // محاولة 4: البحث في الجهاز عن packages مطابقة
+        // Priority 4: Search device for matching packages
         if (adbPath && deviceId && gradlePackage) {
             const devicePackages = await this.findMatchingPackageOnDevice(
                 adbPath,
@@ -85,11 +92,11 @@ export class PackageNameDetector {
     }
 
     /**
-     * 🎯 الحصول على Package Name من APK المبني (الأدق!)
+     * Get Package Name from built APK (most accurate!)
      */
     static async getPackageFromBuiltApk(projectRoot: string): Promise<string | null> {
         try {
-            // البحث عن APK في مسارات البناء المعتادة
+            // Search for APK in common build paths
             const apkPaths = [
                 path.join(projectRoot, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
                 path.join(projectRoot, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk'),
@@ -125,15 +132,15 @@ export class PackageNameDetector {
     }
 
     /**
-     * استخراج Package Name من APK باستخدام aapt
+     * Extract Package Name from APK using aapt
      */
     private static async extractPackageFromApk(apkPath: string): Promise<string | null> {
         try {
-            // محاولة 1: استخدام aapt من Android SDK
+            // Try 1: Use aapt from Android SDK
             const sdkPath = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
             
             if (sdkPath) {
-                // البحث في build-tools (استخدام fs بدلاً من exec لتجنب memory leak)
+                // Search in build-tools (using fs instead of exec to avoid memory leak)
                 const buildToolsPath = path.join(sdkPath, 'build-tools');
                 
                 if (fs.existsSync(buildToolsPath)) {
@@ -158,13 +165,13 @@ export class PackageNameDetector {
                                 console.log(`⚠️ aapt failed: ${error.message}`);
                             }
                             
-                            break; // وجدنا aapt، لا حاج للمزيد من البحث
+                            break; // Found aapt, no need to search more
                         }
                     }
                 }
             }
 
-            // محاولة 2: aapt من PATH (بسيطة)
+            // Try 2: aapt from PATH (simple)
             try {
                 const { stdout } = await execAsync(`aapt dump badging "${apkPath}"`);
                 const match = stdout.match(/package:\s*name='([^']+)'/);
@@ -174,7 +181,7 @@ export class PackageNameDetector {
                     return match[1];
                 }
             } catch (error) {
-                // ااpt ليس في PATH
+                // aapt not in PATH
             }
 
             console.log(`💡 Tip: aapt not found. Install Android SDK build-tools`);
@@ -187,23 +194,23 @@ export class PackageNameDetector {
     }
 
     /**
-     * 🎯 الحصول على Package Name للتطبيق الأمامي (شغال الآن)
+     * Get Package Name of foreground app (currently running)
      */
     static async getForegroundPackage(adbPath: string, deviceId: string): Promise<string | null> {
         try {
-            // الطريقة 1: dumpsys window (الأكثر موثوقية)
+            // Method 1: dumpsys window (most reliable)
             const { stdout } = await execAsync(
                 `"${adbPath}" -s ${deviceId} shell "dumpsys window | grep mCurrentFocus"`
             );
 
-            // البحث عن: mCurrentFocus=Window{... u0 com.example.app/...}
+            // Look for: mCurrentFocus=Window{... u0 com.example.app/...}
             const match = stdout.match(/mCurrentFocus=Window\{[^}]*\s+u\d+\s+([^\s\/]+)/);
             if (match && match[1]) {
                 console.log(`✅ Foreground package: ${match[1]}`);
                 return match[1];
             }
 
-            // الطريقة 2: dumpsys activity (بديلة)
+            // Method 2: dumpsys activity (alternative)
             const { stdout: activityOut } = await execAsync(
                 `"${adbPath}" -s ${deviceId} shell "dumpsys activity activities | grep mResumedActivity"`
             );
@@ -222,7 +229,7 @@ export class PackageNameDetector {
     }
 
     /**
-     * استخراج Package Name من المشروع (مع Build Variants)
+     * Extract Package Name from project (with Build Variants support)
      */
     static async detectPackageName(): Promise<string | null> {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -232,13 +239,13 @@ export class PackageNameDetector {
 
         const projectRoot = workspaceFolder.uri.fsPath;
 
-        // محاولة 1: من build.gradle مع Build Variants
+        // Try 1: From build.gradle with Build Variants
         const packageFromGradle = await this.extractFromBuildGradle(projectRoot);
         if (packageFromGradle) {
             return packageFromGradle;
         }
 
-        // محاولة 2: من AndroidManifest.xml
+        // Try 2: From AndroidManifest.xml
         const packageFromManifest = await this.extractFromManifest(projectRoot);
         if (packageFromManifest) {
             return packageFromManifest;
@@ -248,7 +255,7 @@ export class PackageNameDetector {
     }
 
     /**
-     * استخراج من build.gradle مع دعم Build Variants
+     * Extract from build.gradle with Build Variants support
      */
     private static async extractFromBuildGradle(projectRoot: string): Promise<string | null> {
         const buildGradlePaths = [
@@ -263,18 +270,18 @@ export class PackageNameDetector {
                 try {
                     const content = fs.readFileSync(gradlePath, 'utf-8');
                     
-                    // البحث عن applicationId الأساسي
+                    // Look for base applicationId
                     const basePackageMatch = content.match(/applicationId\s+["']([^"']+)["']/);
                     const namespaceMatch = content.match(/namespace\s*=\s*["']([^"']+)["']/);
                     
                     const basePackage = basePackageMatch?.[1] || namespaceMatch?.[1];
                     
                     if (basePackage) {
-                        // البحث عن applicationIdSuffix للـ debug
+                        // Look for applicationIdSuffix for debug
                         const debugSuffixMatch = content.match(/debug\s*{[^}]*applicationIdSuffix\s+["']([^"']+)["']/s);
                         
                         if (debugSuffixMatch && debugSuffixMatch[1]) {
-                            // إذا وجدنا suffix للـ debug
+                            // If debug suffix found
                             const debugPackage = basePackage + debugSuffixMatch[1];
                             console.log(`✅ Found debug package: ${debugPackage} (base: ${basePackage})`);
                             return debugPackage;
@@ -293,7 +300,7 @@ export class PackageNameDetector {
     }
 
     /**
-     * استخراج من AndroidManifest.xml
+     * Extract from AndroidManifest.xml
      */
     private static async extractFromManifest(projectRoot: string): Promise<string | null> {
         const manifestPaths = [
@@ -322,14 +329,14 @@ export class PackageNameDetector {
     }
 
     /**
-     * الحصول على Package Name من APK (wrapper عام)
+     * Get Package Name from APK (public wrapper)
      */
     static async getPackageFromApk(apkPath: string): Promise<string | null> {
         return await this.extractPackageFromApk(apkPath);
     }
 
     /**
-     * الحصول على قائمة التطبيقات المثبتة على الجهاز
+     * Get list of installed packages on device
      */
     static async getInstalledPackages(adbPath: string, deviceId: string): Promise<string[]> {
         try {
@@ -349,7 +356,7 @@ export class PackageNameDetector {
     }
 
     /**
-     * البحث عن Package Names مطابقة على الجهاز
+     * Find matching Package Names on device
      */
     static async findMatchingPackageOnDevice(
         adbPath: string,
@@ -358,27 +365,27 @@ export class PackageNameDetector {
     ): Promise<string[]> {
         const allPackages = await this.getInstalledPackages(adbPath, deviceId);
         
-        // البحث عن packages تبدأ بالاسم الأساسي
+        // Find packages starting with base name
         const matches = allPackages.filter(pkg => pkg.startsWith(basePackage));
         
         return matches;
     }
 
     /**
-     * عرض Package Names مع المصادر في Quick Pick
+     * Show Package Names with sources in Quick Pick
      */
     static async promptForPackageName(
         detectionResults: PackageDetectionResult[]
     ): Promise<string | null> {
         const items: any[] = [];
 
-        // ترتيب النتائج حسب الثقة
+        // Sort results by confidence
         const sortedResults = detectionResults.sort((a, b) => {
             const confidenceOrder = { high: 0, medium: 1, low: 2 };
             return confidenceOrder[a.confidence] - confidenceOrder[b.confidence];
         });
 
-        // عرض النتائج مع أيقونات حسب المصدر
+        // Show results with icons by source
         sortedResults.forEach((result, index) => {
             const icons = {
                 apk: '📦',
@@ -389,42 +396,42 @@ export class PackageNameDetector {
             };
 
             const descriptions = {
-                apk: 'من APK المبني (دقة 100%)',
-                foreground: 'التطبيق الأمامي الآن',
-                gradle: 'من build.gradle',
-                manifest: 'من AndroidManifest.xml',
-                device: 'مثبت على الجهاز'
+                apk: 'From built APK (100% accurate)',
+                foreground: 'Currently foreground app',
+                gradle: 'From build.gradle',
+                manifest: 'From AndroidManifest.xml',
+                device: 'Installed on device'
             };
 
             items.push({
                 label: `${icons[result.source]} ${result.packageName}`,
                 description: descriptions[result.source],
                 packageName: result.packageName,
-                picked: index === 0, // اختر الأول (الأعلى ثقة)
-                detail: result.confidence === 'high' ? '✅ موصى به' : ''
+                picked: index === 0, // Select first (highest confidence)
+                detail: result.confidence === 'high' ? '✅ Recommended' : ''
             });
         });
 
-        // إزالة المكررات
+        // Remove duplicates
         const uniqueItems = items.filter((item, index, self) =>
             index === self.findIndex(t => t.packageName === item.packageName)
         );
 
-        // فاصل
+        // Separator
         uniqueItems.push({
             label: '─'.repeat(50),
             kind: vscode.QuickPickItemKind.Separator
         });
 
-        // خيار الإدخال اليدوي
+        // Manual input option
         uniqueItems.push({
-            label: '$(edit) إدخال Package Name يدوياً',
-            description: 'للإدخال المخصص',
+            label: '$(edit) Enter Package Name manually',
+            description: 'For custom input',
             packageName: null
         });
 
         const selected = await vscode.window.showQuickPick(uniqueItems, {
-            placeHolder: 'اختر Package Name (مرتب حسب الدقة)'
+            placeHolder: 'Select Package Name (sorted by accuracy)'
         });
 
         if (!selected || selected.kind === vscode.QuickPickItemKind.Separator) {
@@ -435,13 +442,12 @@ export class PackageNameDetector {
             return selected.packageName;
         }
 
-        // إدخال يدوي
+        // Manual input
         const input = await vscode.window.showInputBox({
-            prompt: 'أدخل Package Name للتطبيق',
+            prompt: 'Enter application Package Name',
             placeHolder: 'com.example.app'
         });
 
         return input || null;
     }
 }
-

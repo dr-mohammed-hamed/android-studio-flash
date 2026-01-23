@@ -36,46 +36,49 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BuildSystem = void 0;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
+/**
+ * Manages Android build operations including building, running, and debugging.
+ */
 class BuildSystem {
     constructor(gradleService, deviceManager) {
         this.gradleService = gradleService;
         this.deviceManager = deviceManager;
     }
     /**
-     * بناء Debug APK
+     * Build Debug APK
      */
     async buildDebug() {
         try {
             await this.gradleService.buildDebug();
             const apkPath = this.gradleService.getApkPath('debug');
             if (fs.existsSync(apkPath)) {
-                const action = await vscode.window.showInformationMessage('✅ تم بناء APK بنجاح!', 'تثبيت على جهاز', 'فتح المجلد');
-                if (action === 'تثبيت على جهاز') {
+                const action = await vscode.window.showInformationMessage('✅ APK built successfully!', 'Install on device', 'Open folder');
+                if (action === 'Install on device') {
                     await this.installAndRun(apkPath);
                 }
-                else if (action === 'فتح المجلد') {
+                else if (action === 'Open folder') {
                     const path = require('path');
                     vscode.env.openExternal(vscode.Uri.file(path.dirname(apkPath)));
                 }
             }
             else {
-                vscode.window.showWarningMessage('⚠️ لم يتم العثور على ملف APK');
+                vscode.window.showWarningMessage('⚠️ APK file not found');
             }
         }
         catch (error) {
-            vscode.window.showErrorMessage(`❌ فشل البناء: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Build failed: ${error.message}`);
         }
     }
     /**
-     * بناء Release APK
+     * Build Release APK
      */
     async buildRelease() {
         try {
             await this.gradleService.buildRelease();
             const apkPath = this.gradleService.getApkPath('release');
             if (fs.existsSync(apkPath)) {
-                vscode.window.showInformationMessage('✅ تم بناء Release APK بنجاح!', 'فتح المجلد').then(action => {
-                    if (action === 'فتح المجلد') {
+                vscode.window.showInformationMessage('✅ Release APK built successfully!', 'Open folder').then(action => {
+                    if (action === 'Open folder') {
                         const path = require('path');
                         vscode.env.openExternal(vscode.Uri.file(path.dirname(apkPath)));
                     }
@@ -83,69 +86,69 @@ class BuildSystem {
             }
         }
         catch (error) {
-            vscode.window.showErrorMessage(`❌ فشل البناء: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Build failed: ${error.message}`);
         }
     }
     /**
-     * تنظيف المشروع
+     * Clean project
      */
     async cleanProject() {
         try {
             await this.gradleService.clean();
-            vscode.window.showInformationMessage('✅ تم تنظيف المشروع بنجاح!');
+            vscode.window.showInformationMessage('✅ Project cleaned successfully!');
         }
         catch (error) {
-            vscode.window.showErrorMessage(`❌ فشل التنظيف: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Clean failed: ${error.message}`);
         }
     }
     /**
-     * تشغيل التطبيق على جهاز
+     * Run app on device
      */
     async runApp() {
         try {
-            // بناء APK أولاً
+            // Build APK first
             await this.gradleService.buildDebug();
             const apkPath = this.gradleService.getApkPath('debug');
             if (!fs.existsSync(apkPath)) {
                 throw new Error('APK file not found');
             }
-            // تثبيت وتشغيل
+            // Install and run
             await this.installAndRun(apkPath);
         }
         catch (error) {
-            vscode.window.showErrorMessage(`❌ فشل التشغيل: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Run failed: ${error.message}`);
         }
     }
     /**
-     * تصحيح التطبيق على جهاز
+     * Debug app on device
      */
     async debugApp() {
-        vscode.window.showInformationMessage('🚧 ميزة التصحيح قيد التطوير...');
-        // TODO: تنفيذ Debug Adapter Protocol
+        vscode.window.showInformationMessage('🚧 Debug feature is under development...');
+        // TODO: Implement Debug Adapter Protocol
     }
     /**
-     * تثبيت وتشغيل APK
+     * Install and run APK on device
      */
     async installAndRun(apkPath) {
         const selectedDevice = this.deviceManager.getSelectedDevice();
         if (!selectedDevice) {
             const devices = this.deviceManager.getDevices();
             if (devices.length === 0) {
-                vscode.window.showWarningMessage('⚠️ لا توجد أجهزة متصلة!');
+                vscode.window.showWarningMessage('⚠️ No devices connected!');
                 return;
             }
             await this.deviceManager.selectDevice();
             return this.installAndRun(apkPath);
         }
         try {
-            // تثبيت APK
+            // Install APK
             await this.deviceManager.installApk(apkPath);
-            // الحصول على package name
+            // Get package name
             const packageName = await this.deviceManager.getPackageName(apkPath);
-            // تشغيل التطبيق
-            const activityName = '.MainActivity'; // افتراضي
+            // Launch app
+            const activityName = '.MainActivity'; // Default
             await this.deviceManager.launchApp(packageName, activityName);
-            vscode.window.showInformationMessage('✅ تم تشغيل التطبيق بنجاح!');
+            vscode.window.showInformationMessage('✅ App launched successfully!');
         }
         catch (error) {
             throw new Error(`Failed to install and run: ${error.message}`);

@@ -1,11 +1,18 @@
 import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { DeviceManager } from '../devices/DeviceManager';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
 import { PackageNameDetector } from '../utils/PackageNameDetector';
 
+const execAsync = promisify(exec);
+
 export type LogcatFilterMode = 'all' | 'app' | 'tag';
 
+/**
+ * Manages Android Logcat output with filtering and formatting capabilities.
+ */
 export class LogcatManager {
     private outputChannel: vscode.LogOutputChannel;
     private logcatProcess: ChildProcess | null = null;
@@ -14,29 +21,29 @@ export class LogcatManager {
     private currentFilterMode: LogcatFilterMode = 'app';
     private currentPackageName: string = '';
     private currentTag: string = '';
-    private useGrepFilter: boolean = false; // للتصفية في الكود إذا لم يعمل --pid
+    private useGrepFilter: boolean = false; // For code-level filtering if --pid doesn't work
 
     constructor(private deviceManager: DeviceManager) {
-        // استخدام LogOutputChannel بدلاً من OutputChannel لدعم الألوان
+        // Use LogOutputChannel instead of OutputChannel for color support
         this.outputChannel = vscode.window.createOutputChannel('Android Logcat', { log: true });
         this.sdkManager = new AndroidSDKManager();
     }
 
     /**
-     * عرض Logcat مع التصفية
+     * Show Logcat with filtering
      */
     async showLogcat(filterMode?: LogcatFilterMode, packageName?: string, tag?: string): Promise<void> {
         const selectedDevice = this.deviceManager.getSelectedDevice();
         
         if (!selectedDevice) {
-            vscode.window.showWarningMessage('⚠️ يرجى اختيار جهاز أولاً');
+            vscode.window.showWarningMessage('⚠️ Please select a device first');
             return;
         }
 
-        // إيقاف العملية السابقة إن وجدت
+        // Stop previous process if exists
         this.stopLogcat();
 
-        // تحديد وضع التصفية
+        // Set filter mode
         if (filterMode) {
             this.currentFilterMode = filterMode;
         }
@@ -49,12 +56,12 @@ export class LogcatManager {
             this.currentTag = tag;
         }
 
-        // إذا كان الوضع "app" ولا يوجد package name
+        // If mode is "app" and no package name
         if (this.currentFilterMode === 'app' && !this.currentPackageName) {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             const projectRoot = workspaceFolder?.uri.fsPath;
 
-            // 🎯 استخدام النظام الذكي للحصول على جميع المصادر
+            // Use smart detection system to get all sources
             const detectionResults = await PackageNameDetector.detectPackageNameSmart(
                 this.sdkManager.getADBPath(),
                 selectedDevice.id,
@@ -62,9 +69,9 @@ export class LogcatManager {
             );
 
             if (detectionResults.length === 0) {
-                vscode.window.showWarningMessage('⚠️ لم يتم العثور على Package Name. سيتم الطلب يدوياً.');
+                vscode.window.showWarningMessage('⚠️ Package Name not found. Manual input required.');
                 const input = await vscode.window.showInputBox({
-                    prompt: 'أدخل Package Name للتطبيق',
+                    prompt: 'Enter application Package Name',
                     placeHolder: 'com.example.app'
                 });
                 
@@ -74,34 +81,34 @@ export class LogcatManager {
                 
                 this.currentPackageName = input;
             } else {
-                // عرض جميع النتائج للمستخدم
+                // Show all results to user
                 const selectedPackage = await PackageNameDetector.promptForPackageName(detectionResults);
 
                 if (!selectedPackage) {
-                    return; // المستخدم ألغى
+                    return; // User cancelled
                 }
 
                 this.currentPackageName = selectedPackage;
                 
-                // عرض المصدر المختار
+                // Show selected source
                 const selected = detectionResults.find(r => r.packageName === selectedPackage);
                 if (selected) {
                     const sourceNames = {
-                        apk: 'APK المبني',
-                        foreground: 'التطبيق الأمامي',
+                        apk: 'Built APK',
+                        foreground: 'Foreground App',
                         gradle: 'build.gradle',
                         manifest: 'AndroidManifest.xml',
-                        device: 'الجهاز'
+                        device: 'Device'
                     };
                     console.log(`✅ Using package: ${selectedPackage} (from ${sourceNames[selected.source]})`);
                 }
             }
         }
 
-        // إذا كان الوضع "tag" ولا يوجد tag، اسأل المستخدم
+        // If mode is "tag" and no tag, ask user
         if (this.currentFilterMode === 'tag' && !this.currentTag) {
             const input = await vscode.window.showInputBox({
-                prompt: 'أدخل TAG للتصفية',
+                prompt: 'Enter TAG to filter',
                 placeHolder: 'MyApp'
             });
 
@@ -123,7 +130,7 @@ export class LogcatManager {
             this.outputChannel.appendLine(`🔍 Filter Mode: ${this.getFilterModeLabel()}`);
             this.outputChannel.appendLine('━'.repeat(80));
 
-            // بناء الأمر حسب وضع التصفية (الآن async)
+            // Build command based on filter mode (now async)
             this.useGrepFilter = false; // reset
             const logcatArgs = await this.buildLogcatArgs(selectedDevice.id);
 
@@ -134,9 +141,9 @@ export class LogcatManager {
                 const lines = data.toString().split('\n');
                 lines.forEach(line => {
                     if (line.trim()) {
-                        // إذا كنا نستخدم grep filter (التطبيق غير شغال)
+                        // If using grep filter (app not running)
                         if (this.useGrepFilter && this.currentPackageName) {
-                            // تصفية السطور التي تحتوي على package name
+                            // Filter lines containing package name
                             if (line.includes(this.currentPackageName)) {
                                 this.logFormattedLine(line);
                             }
@@ -154,12 +161,12 @@ export class LogcatManager {
             });
 
         } catch (error: any) {
-            vscode.window.showErrorMessage(`❌ فشل تشغيل Logcat: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Failed to start Logcat: ${error.message}`);
         }
     }
 
     /**
-     * بناء arguments للـ logcat حسب وضع التصفية
+     * Build logcat arguments based on filter mode
      */
     private async buildLogcatArgs(deviceId: string): Promise<string[]> {
         const args = ['-s', deviceId, 'logcat', '-v', 'time'];
@@ -168,11 +175,8 @@ export class LogcatManager {
             case 'app':
                 if (this.currentPackageName) {
                     try {
-                        // الحصول على PID من الجهاز
+                        // Get PID from device
                         const adbPath = this.sdkManager.getADBPath();
-                        const { exec } = require('child_process');
-                        const { promisify } = require('util');
-                        const execAsync = promisify(exec);
                         
                         const { stdout } = await execAsync(
                             `"${adbPath}" -s ${deviceId} shell "pidof -s ${this.currentPackageName}"`
@@ -185,8 +189,8 @@ export class LogcatManager {
                             args.push('--pid', pid);
                         } else {
                             console.log(`⚠️ App ${this.currentPackageName} is not running. Showing all logs with grep filter instead.`);
-                            // بديل: استخدام grep للتصفية
-                            // سنستخدم logcat عادي ونصفي في الكود
+                            // Alternative: use grep for filtering
+                            // We'll use normal logcat and filter in code
                             this.useGrepFilter = true;
                         }
                     } catch (error) {
@@ -198,7 +202,7 @@ export class LogcatManager {
 
             case 'tag':
                 if (this.currentTag) {
-                    // تصفية حسب TAG
+                    // Filter by TAG
                     args.push('-s');
                     args.push(`${this.currentTag}:*`);
                 }
@@ -206,7 +210,7 @@ export class LogcatManager {
 
             case 'all':
             default:
-                // لا تصفية - كل السجلات
+                // No filtering - all logs
                 break;
         }
 
@@ -214,12 +218,12 @@ export class LogcatManager {
     }
 
     /**
-     * الحصول على اسم وضع التصفية
+     * Get filter mode label
      */
     private getFilterModeLabel(): string {
         switch (this.currentFilterMode) {
             case 'all':
-                return 'All Logs (جميع السجلات)';
+                return 'All Logs';
             case 'app':
                 return `App Only: ${this.currentPackageName}`;
             case 'tag':
@@ -230,50 +234,50 @@ export class LogcatManager {
     }
 
     /**
-     * تبديل وضع التصفية
+     * Toggle filter mode
      */
     async toggleFilterMode(): Promise<void> {
         const modes: { label: string; mode: LogcatFilterMode; description: string }[] = [
             {
                 label: '$(package) App Only',
                 mode: 'app',
-                description: 'عرض سجلات التطبيق فقط (مثل Android Studio)'
+                description: 'Show app logs only (like Android Studio)'
             },
             {
                 label: '$(list-tree) All Logs',
                 mode: 'all',
-                description: 'عرض جميع السجلات من الجهاز'
+                description: 'Show all logs from device'
             },
             {
                 label: '$(tag) Tag Filter',
                 mode: 'tag',
-                description: 'تصفية حسب TAG معين'
+                description: 'Filter by specific TAG'
             }
         ];
 
         const selected = await vscode.window.showQuickPick(modes, {
-            placeHolder: 'اختر وضع التصفية'
+            placeHolder: 'Select filter mode'
         });
 
         if (selected) {
             this.currentFilterMode = selected.mode;
             
-            // إعادة تشغيل Logcat بالوضع الجديد
+            // Restart Logcat with new mode
             if (this.isRunning) {
                 await this.showLogcat();
             } else {
-                vscode.window.showInformationMessage(`✅ تم تغيير وضع التصفية إلى: ${selected.label}`);
+                vscode.window.showInformationMessage(`✅ Filter mode changed to: ${selected.label}`);
             }
         }
     }
 
     /**
-     * طباعة سطر مع المستوى المناسب
+     * Print line with appropriate log level
      */
     private logFormattedLine(line: string): void {
         const formattedLine = this.formatLogLine(line);
         
-        // تحديد المستوى من السطر للاستخدام الصحيح للـ log methods
+        // Determine level from line for correct log method usage
         if (line.includes(' E/') || line.includes('ERROR')) {
             this.outputChannel.error(formattedLine);
         } else if (line.includes(' W/') || line.includes('WARNING')) {
@@ -281,23 +285,23 @@ export class LogcatManager {
         } else if (line.includes(' I/') || line.includes('INFO')) {
             this.outputChannel.info(formattedLine);
         } else {
-            // DEBUG, VERBOSE, وغيرها
+            // DEBUG, VERBOSE, etc.
             this.outputChannel.trace(formattedLine);
         }
     }
 
     /**
-     * تنسيق سطر السجل (احترافي مع highlighting للكلمات الهامة)
+     * Format log line with icons and highlighting
      */
     private formatLogLine(line: string): string {
-        // تحليل نوع السجل من Logcat format
+        // Parse Logcat format
         // Format: 01-17 23:10:45.123 D/TagName(12345): Message
         const logLevelMatch = line.match(/(\d{2}-\d{2}\s+)?(\d{2}:\d{2}:\d{2}\.\d+)\s+([VDIWEF])\/([^(]+)\((\d+)\):\s+(.+)/);
         
         if (logLevelMatch) {
             const [, , time, level, tag, pid, message] = logLevelMatch;
             
-            // اختصار الوقت (إزالة الميلي ثانية الزائدة)
+            // Shorten time (remove extra milliseconds)
             const shortTime = time.substring(0, 12); // HH:MM:SS.mmm
             
             let icon = '○';
@@ -338,23 +342,23 @@ export class LogcatManager {
                     return line;
             }
             
-            // تحسين: Highlight الكلمات الحرجة في الرسالة
+            // Highlight critical words in message
             const highlightedMessage = this.highlightCriticalWords(message);
             
-            // تحسين: كشف Stack Traces
+            // Detect Stack Traces
             const isStackTrace = message.trim().startsWith('at ') || 
                                 message.includes('Exception') ||
                                 message.includes('Error:');
             
             const prefix = isStackTrace ? '  ↪ ' : '';
             
-            // تنسيق محسّن مع فواصل واضحة
+            // Enhanced formatting with clear separators
             const formattedLine = [
                 shortTime,
                 icon,
                 levelName.padEnd(5),
                 '│',
-                tag.trim().padEnd(25), // TAG كامل (25 حرف)
+                tag.trim().padEnd(25), // Full TAG (25 chars)
                 '│',
                 `(${pid.padStart(5)})`,
                 '│',
@@ -364,15 +368,15 @@ export class LogcatManager {
             return formattedLine;
         }
         
-        // إذا لم نستطع parse السطر، أرجعه كما هو
+        // If we can't parse, return as-is
         return line;
     }
 
     /**
-     * تحسين: Highlight الكلمات الحرجة
+     * Highlight critical words in message
      */
     private highlightCriticalWords(message: string): string {
-        // كلمات حرجة
+        // Critical words
         const criticalWords = [
             'crash', 'exception', 'error', 'fatal', 'killed',
             'nullpointer', 'outofmemory', 'stackoverflow',
@@ -381,7 +385,7 @@ export class LogcatManager {
         
         let highlighted = message;
         
-        // إضافة علامة ⚡ قبل الكلمات الحرجة
+        // Add ⚡ marker before critical words
         criticalWords.forEach(word => {
             const regex = new RegExp(`\\b${word}\\b`, 'gi');
             highlighted = highlighted.replace(regex, match => `⚡${match}⚡`);
@@ -391,7 +395,7 @@ export class LogcatManager {
     }
 
     /**
-     * مسح Logcat
+     * Clear Logcat output
      */
     clearLogcat(): void {
         this.outputChannel.clear();
@@ -407,7 +411,7 @@ export class LogcatManager {
     }
 
     /**
-     * إيقاف Logcat
+     * Stop Logcat
      */
     stopLogcat(): void {
         if (this.logcatProcess) {
@@ -418,7 +422,7 @@ export class LogcatManager {
     }
 
     /**
-     * الحصول على وضع التصفية الحالي
+     * Get current filter mode
      */
     getCurrentFilterMode(): LogcatFilterMode {
         return this.currentFilterMode;

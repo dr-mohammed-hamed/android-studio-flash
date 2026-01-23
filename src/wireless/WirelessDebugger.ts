@@ -6,61 +6,64 @@ const execAsync = promisify(exec);
 
 export type PairingMethod = 'pairing-code' | 'qr-code';
 
+/**
+ * Handles Wireless Debugging pairing for Android 11+ devices.
+ */
 export class WirelessDebugger {
     constructor(private adbPath: string) {}
 
     /**
-     * اختيار طريقة Pairing
+     * Prompt user to select pairing method
      */
     async promptPairingMethod(): Promise<PairingMethod | null> {
         const items = [
             {
                 label: '$(key) Pairing Code',
-                description: 'استخدام 6-digit code',
+                description: 'Use 6-digit code',
                 detail: 'Settings → Developer options → Wireless debugging → Pair device with pairing code',
                 method: 'pairing-code' as const
             },
             {
                 label: '$(device-camera) QR Code',
-                description: 'مسح QR Code (قريباً)',
+                description: 'Scan QR Code (coming soon)',
                 detail: 'Settings → Developer options → Wireless debugging → Pair device with QR code',
                 method: 'qr-code' as const
             }
         ];
 
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'كيف تريد إقران الجهاز؟'
+            placeHolder: 'How would you like to pair the device?'
         });
 
         return selected?.method || null;
     }
 
     /**
-     * Pairing باستخدام Code
+     * Pair using pairing code
      */
     async pairWithCode(): Promise<void> {
-        // الخطوة 1: اطلب من المستخدم تفعيل Wireless Debugging
+        // Step 1: Ask user to enable Wireless Debugging
         const confirmed = await vscode.window.showInformationMessage(
-            '📱 على الجهاز:\n' +
-            '1. افتح Settings → Developer options → Wireless debugging\n' +
-            '2. فعّل Wireless debugging\n' +
-            '3. اضغط "Pair device with pairing code"\n' +
-            '4. اترك الشاشة مفتوحة',
-            'جاهز ✅',
-            'إلغاء'
+            '📱 On your device:\n' +
+            '1. Open Settings → Developer options → Wireless debugging\n' +
+            '2. Enable Wireless debugging\n' +
+            '3. Tap "Pair device with pairing code"\n' +
+            '4. Keep the screen open',
+            'Ready ✅',
+            'Cancel'
         );
 
-        if (confirmed !== 'جاهز ✅') {
+        if (confirmed !== 'Ready ✅') {
             return;
         }
 
-        // الخطوة 2: اطلب IP و Port
+        // Step 2: Ask for IP and Port
         const ipPort = await vscode.window.showInputBox({
-            prompt: 'أدخل IP Address:Port (مثال: 192.168.1.100:45678)',
+            prompt: 'Enter IP Address:Port (e.g., 192.168.1.100:45678)',
             placeHolder: '192.168.1.100:45678',
             validateInput: (value) => {
                 const regex = /^(\d{1,3}\.){3}\d{1,3}:\d+$/;
-                return regex.test(value) ? null : 'صيغة خاطئة. استخدم: IP:PORT';
+                return regex.test(value) ? null : 'Invalid format. Use: IP:PORT';
             }
         });
 
@@ -68,12 +71,12 @@ export class WirelessDebugger {
             return;
         }
 
-        // الخطوة 3: اطلب Pairing Code
+        // Step 3: Ask for Pairing Code
         const pairingCode = await vscode.window.showInputBox({
-            prompt: 'أدخل الـ Pairing Code المكون من 6 أرقام',
+            prompt: 'Enter the 6-digit Pairing Code',
             placeHolder: '123456',
             validateInput: (value) => {
-                return /^\d{6}$/.test(value) ? null : 'يجب أن يكون 6 أرقام';
+                return /^\d{6}$/.test(value) ? null : 'Must be 6 digits';
             }
         });
 
@@ -81,18 +84,18 @@ export class WirelessDebugger {
             return;
         }
 
-        // الخطوة 4: تنفيذ Pairing
+        // Step 4: Execute Pairing
         await this.executePairing(ipPort, pairingCode);
     }
 
     /**
-     * تنفيذ عملية Pairing
+     * Execute pairing operation
      */
     private async executePairing(ipPort: string, pairingCode: string): Promise<void> {
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: '🔄 جارِ الإقران...',
+                title: '🔄 Pairing...',
                 cancellable: false
             }, async () => {
                 // adb pair IP:PORT CODE
@@ -107,33 +110,33 @@ export class WirelessDebugger {
                 }
             });
 
-            // نجح الإقران - الآن نتصل
+            // Pairing successful - now connect
             await this.connectAfterPairing(ipPort.split(':')[0]);
 
         } catch (error: any) {
             vscode.window.showErrorMessage(
-                `❌ فشل الإقران: ${error.message}\n\n` +
-                'تأكد من:\n' +
-                '• الجهاز والكمبيوتر على نفس الشبكة\n' +
-                '• Pairing Code صحيح\n' +
-                '• IP:Port صحيح'
+                `❌ Pairing failed: ${error.message}\n\n` +
+                'Make sure:\n' +
+                '• Device and computer are on the same network\n' +
+                '• Pairing Code is correct\n' +
+                '• IP:Port is correct'
             );
         }
     }
 
     /**
-     * الاتصال بعد الإقران الناجح
+     * Connect after successful pairing
      */
     private async connectAfterPairing(deviceIp: string): Promise<void> {
-        // بعد الإقران، نحتاج للاتصال بالجهاز
-        // عادة يكون على port مختلف (غالباً يظهر في "Wireless debugging" screen)
+        // After pairing, we need to connect to the device
+        // Usually on a different port (shown in "Wireless debugging" screen)
         
         const port = await vscode.window.showInputBox({
-            prompt: 'على الجهاز، ارجع للشاشة الرئيسية لـ Wireless debugging\n' +
-                    'أدخل رقم الـ Port المعروض تحت "Device name" (مثال: 37843)',
+            prompt: 'On the device, go back to the main Wireless debugging screen\n' +
+                    'Enter the Port number shown under "Device name" (e.g., 37843)',
             placeHolder: '37843',
             validateInput: (value) => {
-                return /^\d+$/.test(value) ? null : 'يجب أن يكون رقماً';
+                return /^\d+$/.test(value) ? null : 'Must be a number';
             }
         });
 
@@ -147,15 +150,15 @@ export class WirelessDebugger {
             await execAsync(`"${this.adbPath}" connect ${endpoint}`);
             
             vscode.window.showInformationMessage(
-                `✅ تم الاتصال بنجاح!\n${endpoint}\n\n` +
-                'يمكنك الآن فصل كابل USB (إن كان موصولاً)'
+                `✅ Connected successfully!\n${endpoint}\n\n` +
+                'You can now disconnect the USB cable (if connected)'
             );
 
-            // تحديث قائمة الأجهزة
+            // Refresh device list
             vscode.commands.executeCommand('android.refreshDevices');
 
         } catch (error: any) {
-            vscode.window.showErrorMessage(`❌ فشل الاتصال: ${error.message}`);
+            vscode.window.showErrorMessage(`❌ Connection failed: ${error.message}`);
         }
     }
 }

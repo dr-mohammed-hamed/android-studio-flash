@@ -19,7 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 Android Studio Lite is now active!');
 
     try {
-        // تهيئة المكونات الأساسية
+        // Initialize core components
         const sdkManager = new AndroidSDKManager();
         const gradleService = new GradleService();
         deviceManager = new DeviceManager();
@@ -27,14 +27,14 @@ export async function activate(context: vscode.ExtensionContext) {
         logcatManager = new LogcatManager(deviceManager);
         wirelessManager = new WirelessADBManager(sdkManager.getADBPath(), context);
 
-        // تهيئة واجهة المستخدم
+        // Initialize UI components
         statusBar = new BuildStatusBar(deviceManager);
         treeProvider = new AndroidTreeProvider(deviceManager, buildSystem, logcatManager, wirelessManager);
 
-        // تسجيل Tree View
+        // Register Tree View
         vscode.window.registerTreeDataProvider('androidPanel', treeProvider);
 
-        // تسجيل الأوامر - Build Commands
+        // Register Build Commands
         context.subscriptions.push(
             vscode.commands.registerCommand('android.buildApk', async () => {
                 await buildSystem.buildDebug();
@@ -65,7 +65,7 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // أوامر التشغيل
+        // Run Commands
         context.subscriptions.push(
             vscode.commands.registerCommand('android.runApp', async () => {
                 await buildSystem.runApp();
@@ -78,7 +78,7 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // أوامر الأجهزة
+        // Device Commands
         context.subscriptions.push(
             vscode.commands.registerCommand('android.selectDevice', async () => {
                 await deviceManager.selectDevice();
@@ -87,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.commands.registerCommand('android.selectDeviceFromTree', async (device) => {
-                // تحديد الجهاز مباشرة من Tree
+                // Select device directly from Tree
                 if (device) {
                     deviceManager.getDevices().forEach(d => {
                         if (d.id === device.id) {
@@ -110,7 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // أوامر Logcat
+        // Logcat Commands
         context.subscriptions.push(
             vscode.commands.registerCommand('android.showLogcat', async () => {
                 await logcatManager.showLogcat();
@@ -136,7 +136,7 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // أوامر Wireless ADB
+        // Wireless ADB Commands
         context.subscriptions.push(
             vscode.commands.registerCommand('android.setupWireless', async () => {
                 await wirelessManager.setupWirelessConnection();
@@ -160,7 +160,7 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // أمر تشخيص المشاكل
+        // Diagnostics Command
         context.subscriptions.push(
             vscode.commands.registerCommand('android.runDiagnostics', async () => {
                 const { runDiagnostics } = require('./utils/diagnostics');
@@ -182,8 +182,8 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.commands.registerCommand('android.reconnectWirelessDevice', async (device) => {
                 if (device && device.ipAddress && device.port) {
                     const endpoint = `${device.ipAddress}:${device.port}`;
-                    vscode.window.showInformationMessage(`🔄 إعادة الاتصال بـ ${endpoint}...`);
-                    // سيتم معالجتها بواسطة attemptReconnect داخلياً
+                    vscode.window.showInformationMessage(`🔄 Reconnecting to ${endpoint}...`);
+                    // Will be handled by attemptReconnect internally
                     await wirelessManager.autoReconnectSavedDevices();
                     await deviceManager.refreshDevices();
                     treeProvider.refresh();
@@ -191,18 +191,18 @@ export async function activate(context: vscode.ExtensionContext) {
             })
         );
 
-        // تحديث أولي للأجهزة
-        // ✅ Auto-reconnect للأجهزة اللاسلكية المحفوظة
+        // Initial device refresh
+        // Auto-reconnect saved wireless devices
         await wirelessManager.autoReconnectSavedDevices();
         
         await deviceManager.refreshDevices();
         statusBar.update();
 
-        // رسالة ترحيب
-        vscode.window.showInformationMessage('✅ Android Studio Lite جاهز للاستخدام!');
+        // Welcome message
+        vscode.window.showInformationMessage('✅ Android Studio Lite is ready!');
 
     } catch (error) {
-        vscode.window.showErrorMessage(`❌ خطأ في تهيئة الإضافة: ${error}`);
+        vscode.window.showErrorMessage(`❌ Extension initialization error: ${error}`);
         console.error('Activation error:', error);
     }
 }

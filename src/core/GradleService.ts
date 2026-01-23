@@ -7,6 +7,9 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+/**
+ * Service for executing Gradle tasks and managing Android project builds.
+ */
 export class GradleService {
     private outputChannel: vscode.OutputChannel;
 
@@ -15,7 +18,7 @@ export class GradleService {
     }
 
     /**
-     * الحصول على مسار Gradle Wrapper
+     * Get Gradle Wrapper path
      */
     private getGradlewPath(): string {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -35,7 +38,7 @@ export class GradleService {
     }
 
     /**
-     * تنفيذ أمر Gradle
+     * Execute a Gradle task
      */
     async executeGradleTask(task: string, showOutput: boolean = true): Promise<string> {
         try {
@@ -48,7 +51,7 @@ export class GradleService {
                 this.outputChannel.appendLine('━'.repeat(50));
             }
 
-            // تنفيذ الأمر
+            // Execute command
             const { stdout, stderr } = await execAsync(`"${gradlew}" ${task}`, {
                 cwd: workspaceFolder,
                 maxBuffer: 10 * 1024 * 1024 // 10MB buffer
@@ -83,7 +86,7 @@ export class GradleService {
     }
 
     /**
-     * بناء Debug APK
+     * Build Debug APK
      */
     async buildDebug(): Promise<string> {
         return await vscode.window.withProgress({
@@ -96,7 +99,7 @@ export class GradleService {
     }
 
     /**
-     * بناء Release APK
+     * Build Release APK
      */
     async buildRelease(): Promise<string> {
         return await vscode.window.withProgress({
@@ -109,7 +112,7 @@ export class GradleService {
     }
 
     /**
-     * تنظيف المشروع
+     * Clean project
      */
     async clean(): Promise<string> {
         return await vscode.window.withProgress({
@@ -122,7 +125,7 @@ export class GradleService {
     }
 
     /**
-     * مزامنة Gradle
+     * Sync Gradle
      */
     async syncGradle(): Promise<void> {
         await vscode.window.withProgress({
@@ -131,7 +134,7 @@ export class GradleService {
             cancellable: false
         }, async () => {
             try {
-                // تنفيذ tasks لمزامنة المشروع
+                // Execute tasks to sync project
                 await this.executeGradleTask('tasks', false);
                 vscode.window.showInformationMessage('✅ Gradle sync completed!');
             } catch (error: any) {
@@ -142,7 +145,7 @@ export class GradleService {
     }
 
     /**
-     * الحصول على مسار APK المبني
+     * Get built APK path
      */
     getApkPath(variant: 'debug' | 'release' = 'debug'): string {
         const workspaceFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
@@ -160,7 +163,7 @@ export class GradleService {
     }
 
     /**
-     * التحقق من وجود ملف build.gradle
+     * Check if current workspace is an Android project
      */
     isAndroidProject(): boolean {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];

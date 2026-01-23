@@ -1,10 +1,18 @@
 {
   "name": "android-studio-lite",
   "displayName": "Android Studio Lite",
-  "description": "بديل خفيف لـ Android Studio - يوفر جميع المميزات الأساسية لتطوير Android في VS Code",
+  "description": "A lightweight alternative to Android Studio - bringing essential Android development features to VS Code",
   "version": "0.1.0",
-  "publisher": "android-dev",
-  "icon": "resources/icon.png",
+  "publisher": "dr-mohammed-hamed",
+  "author": {
+    "name": "Dr. Mohammed Hamed"
+  },
+  "license": "MIT",
+  "icon": "logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dr-mohammed-hamed/android-studio-lite"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -18,7 +26,10 @@
     "gradle",
     "adb",
     "mobile",
-    "emulator"
+    "emulator",
+    "apk",
+    "logcat",
+    "wireless debugging"
   ],
   "activationEvents": [
     "workspaceContains:**/build.gradle",
@@ -136,8 +147,8 @@
       "activitybar": [
         {
           "id": "android-explorer",
-          "title": "Android",
-          "icon": "resources/android-icon.svg"
+          "title": "Android Studio Lite",
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -192,27 +203,27 @@
         "android.sdkPath": {
           "type": "string",
           "default": "",
-          "description": "مسار Android SDK (سيتم اكتشافه تلقائياً إذا كان فارغاً)"
+          "description": "Path to Android SDK (auto-detected if empty)"
         },
         "android.gradlePath": {
           "type": "string",
           "default": "",
-          "description": "مسار Gradle (سيتم استخدام Gradle Wrapper إذا كان فارغاً)"
+          "description": "Path to Gradle (uses Gradle Wrapper if empty)"
         },
         "android.adbPath": {
           "type": "string",
           "default": "",
-          "description": "مسار ADB (سيتم اكتشافه من SDK إذا كان فارغاً)"
+          "description": "Path to ADB (auto-detected from SDK if empty)"
         },
         "android.logcat.maxLines": {
           "type": "number",
           "default": 1000,
-          "description": "الحد الأقصى لعدد سطور Logcat"
+          "description": "Maximum number of Logcat lines"
         },
         "android.build.showNotifications": {
           "type": "boolean",
           "default": true,
-          "description": "إظهار إشعارات عند اكتمال البناء"
+          "description": "Show notifications when build completes"
         }
       }
     }

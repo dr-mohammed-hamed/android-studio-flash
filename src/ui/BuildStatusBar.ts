@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 import { DeviceManager } from '../devices/DeviceManager';
 
+/**
+ * Status bar item that shows the current device and provides quick run access.
+ */
 export class BuildStatusBar {
     private runStatusBarItem: vscode.StatusBarItem;
 
     constructor(private deviceManager: DeviceManager) {
-        // زر Run فقط
+        // Run button only
         this.runStatusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
@@ -15,14 +18,14 @@ export class BuildStatusBar {
         this.update();
         this.show();
 
-        // تحديث عند تغيير الأجهزة
+        // Update when devices change
         this.deviceManager.onDidChangeDevices(() => {
             this.update();
         });
     }
 
     private setupStatusBarItems() {
-        // زر Run مع اسم الجهاز
+        // Run button with device name
         this.runStatusBarItem.command = 'android.runApp';
         this.runStatusBarItem.tooltip = 'Build and Run on device';
     }

@@ -39,6 +39,9 @@ const child_process_1 = require("child_process");
 const util_1 = require("util");
 const AndroidSDKManager_1 = require("../core/AndroidSDKManager");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
+/**
+ * Manages Android device detection, selection, and operations.
+ */
 class DeviceManager {
     constructor() {
         this.devices = [];
@@ -47,6 +50,9 @@ class DeviceManager {
         this.onDidChangeDevices = this.onDidChangeDevicesEmitter.event;
         this.sdkManager = new AndroidSDKManager_1.AndroidSDKManager();
     }
+    /**
+     * Refresh the list of connected devices
+     */
     async refreshDevices() {
         try {
             const adbPath = this.sdkManager.getADBPath();
@@ -55,7 +61,7 @@ class DeviceManager {
             const lines = stdout.split('\n');
             for (const line of lines) {
                 if (line && !line.startsWith('List of devices') && line.trim()) {
-                    // مثال على السطر:
+                    // Example line:
                     // 5cda021f               device usb:1-1 product:RMX2061 model:RMX2061 device:RMX2061L1
                     const parts = line.split(/\s+/);
                     if (parts.length >= 2) {
@@ -64,13 +70,13 @@ class DeviceManager {
                             type: parts[0].startsWith('emulator-') ? 'emulator' : 'device',
                             state: parts[1]
                         };
-                        // استخراج معلومات إضافية من باقي السطر
-                        // البحث عن: model:xxx product:xxx device:xxx
+                        // Extract additional info from rest of line
+                        // Looking for: model:xxx product:xxx device:xxx
                         const modelMatch = line.match(/model:([^\s]+)/);
                         const productMatch = line.match(/product:([^\s]+)/);
                         const deviceMatch = line.match(/device:([^\s]+)/);
                         if (modelMatch) {
-                            device.model = modelMatch[1].replace(/_/g, ' '); // استبدال _ بمسافات
+                            device.model = modelMatch[1].replace(/_/g, ' '); // Replace _ with spaces
                         }
                         if (productMatch) {
                             device.product = productMatch[1];
@@ -91,23 +97,32 @@ class DeviceManager {
             console.error('❌ Failed to refresh devices:', error);
             console.error('Error details:', error.message);
             this.devices = [];
-            // إشعار المستخدم بالخطأ
-            vscode.window.showErrorMessage(`❌ فشل تحديث الأجهزة: ${error.message}\n\n` +
-                'الأسباب المحتملة:\n' +
-                '• Android SDK غير مثبت أو غير مُكتشف\n' +
-                '• ADB غير موجود في platform-tools\n' +
-                '• الجهاز غير موصول أو USB Debugging غير مُفعّل');
+            // Notify user of error
+            vscode.window.showErrorMessage(`❌ Failed to refresh devices: ${error.message}\n\n` +
+                'Possible causes:\n' +
+                '• Android SDK not installed or not detected\n' +
+                '• ADB not found in platform-tools\n' +
+                '• Device not connected or USB Debugging not enabled');
         }
     }
+    /**
+     * Get list of connected devices
+     */
     getDevices() {
         return this.devices;
     }
+    /**
+     * Get currently selected device
+     */
     getSelectedDevice() {
         return this.selectedDevice;
     }
+    /**
+     * Show device selection dialog
+     */
     async selectDevice() {
         if (this.devices.length === 0) {
-            vscode.window.showWarningMessage('⚠️ لا توجد أجهزة متصلة!');
+            vscode.window.showWarningMessage('⚠️ No devices connected!');
             return;
         }
         const items = this.devices.map(device => ({
@@ -116,20 +131,26 @@ class DeviceManager {
             device: device
         }));
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: 'اختر جهازاً'
+            placeHolder: 'Select a device'
         });
         if (selected) {
             this.selectedDevice = selected.device;
             this.onDidChangeDevicesEmitter.fire();
         }
     }
+    /**
+     * Get display name for a device
+     */
     getDeviceDisplayName(device) {
         const icon = device.type === 'emulator' ? '📱' : '🔌';
         const status = device.state === 'online' || device.state === 'device' ? '🟢' : '🔴';
-        // عرض اسم الجهاز الحقيقي (model أو product) بدلاً من ID
+        // Show real device name (model or product) instead of ID
         const name = device.model || device.product || device.device || device.id;
         return `${status} ${icon} ${name}`;
     }
+    /**
+     * Install APK on selected device
+     */
     async installApk(apkPath) {
         const device = this.selectedDevice;
         if (!device)
@@ -137,6 +158,9 @@ class DeviceManager {
         const adbPath = this.sdkManager.getADBPath();
         await execAsync(`"${adbPath}" -s ${device.id} install -r "${apkPath}"`);
     }
+    /**
+     * Launch app on selected device
+     */
     async launchApp(packageName, activityName) {
         const device = this.selectedDevice;
         if (!device)
@@ -145,8 +169,12 @@ class DeviceManager {
         const fullActivity = `${packageName}/${activityName}`;
         await execAsync(`"${adbPath}" -s ${device.id} shell am start -n ${fullActivity}`);
     }
+    /**
+     * Get package name from APK
+     * TODO: Implement proper APK parsing using aapt
+     */
     async getPackageName(apkPath) {
-        return 'com.example.app'; // مبسط للآن
+        return 'com.example.app'; // Simplified for now
     }
     dispose() {
         this.onDidChangeDevicesEmitter.dispose();
