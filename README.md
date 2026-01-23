@@ -1,4 +1,4 @@
-# Android Studio Lite
+# Android Studio Flash
 
 <div align="center">
 
@@ -54,12 +54,12 @@
 ### From VS Code Marketplace
 1. Open VS Code
 2. Go to Extensions (`Ctrl+Shift+X`)
-3. Search for "Android Studio Lite"
+3. Search for "Android Studio Flash"
 4. Click **Install**
 
 ### From VSIX File
 ```bash
-code --install-extension android-studio-lite-0.1.0.vsix
+code --install-extension android-studio-flash-0.1.0.vsix
 ```
 
 ---

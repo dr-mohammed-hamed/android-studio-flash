@@ -1,6 +1,6 @@
 {
-  "name": "android-studio-lite",
-  "displayName": "Android Studio Lite",
+  "name": "android-studio-flash",
+  "displayName": "Android Studio Flash",
   "description": "A lightweight alternative to Android Studio - bringing essential Android development features to VS Code",
   "version": "0.1.0",
   "publisher": "dr-mohammed-hamed",
@@ -11,7 +11,7 @@
   "icon": "logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dr-mohammed-hamed/android-studio-lite"
+    "url": "https://github.com/dr-mohammed-hamed/android-studio-flash"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -147,7 +147,7 @@
       "activitybar": [
         {
           "id": "android-explorer",
-          "title": "Android Studio Lite",
+          "title": "Android Studio Flash",
           "icon": "resources/icon.svg"
         }
       ]
@@ -198,7 +198,7 @@
       ]
     },
     "configuration": {
-      "title": "Android Studio Lite",
+      "title": "Android Studio Flash",
       "properties": {
         "android.sdkPath": {
           "type": "string",

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-01-23
 
 ### Added
-- 🎉 Initial release of Android Studio Lite
+- 🎉 Initial release of Android Studio Flash
 - **Build System**
   - Build Debug APK
   - Build Release APK

@@ -51,7 +51,7 @@ let logcatManager;
 let treeProvider;
 let wirelessManager;
 async function activate(context) {
-    console.log('🚀 Android Studio Lite is now active!');
+    console.log('🚀 Android Studio Flash is now active!');
     try {
         // Initialize core components
         const sdkManager = new AndroidSDKManager_1.AndroidSDKManager();
@@ -168,7 +168,7 @@ async function activate(context) {
         await deviceManager.refreshDevices();
         statusBar.update();
         // Welcome message
-        vscode.window.showInformationMessage('✅ Android Studio Lite is ready!');
+        vscode.window.showInformationMessage('✅ Android Studio Flash is ready!');
     }
     catch (error) {
         vscode.window.showErrorMessage(`❌ Extension initialization error: ${error}`);
@@ -176,7 +176,7 @@ async function activate(context) {
     }
 }
 function deactivate() {
-    console.log('👋 Android Studio Lite is deactivating...');
+    console.log('👋 Android Studio Flash is deactivating...');
     if (logcatManager) {
         logcatManager.dispose();
     }

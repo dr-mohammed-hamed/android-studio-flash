@@ -16,7 +16,7 @@ let treeProvider: AndroidTreeProvider;
 let wirelessManager: WirelessADBManager;
 
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('🚀 Android Studio Lite is now active!');
+    console.log('🚀 Android Studio Flash is now active!');
 
     try {
         // Initialize core components
@@ -199,7 +199,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusBar.update();
 
         // Welcome message
-        vscode.window.showInformationMessage('✅ Android Studio Lite is ready!');
+        vscode.window.showInformationMessage('✅ Android Studio Flash is ready!');
 
     } catch (error) {
         vscode.window.showErrorMessage(`❌ Extension initialization error: ${error}`);
@@ -208,7 +208,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-    console.log('👋 Android Studio Lite is deactivating...');
+    console.log('👋 Android Studio Flash is deactivating...');
     
     if (logcatManager) {
         logcatManager.dispose();
