@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
+import { exec, spawn, ChildProcess } from 'child_process'; // Added spawn and ChildProcess
 
 const execAsync = promisify(exec);
 
@@ -26,9 +26,42 @@ export class DeviceManager {
     private sdkManager: AndroidSDKManager;
     private onDidChangeDevicesEmitter = new vscode.EventEmitter<void>();
     readonly onDidChangeDevices = this.onDidChangeDevicesEmitter.event;
-
+    private adbTracker: ChildProcess | null = null; // Reference to the tracking process    
+    
+    // Timer to prevent multiple refreshes at once
+    private refreshTimeout: NodeJS.Timeout | undefined; 
+    
     constructor() {
         this.sdkManager = new AndroidSDKManager();
+         this.refreshDevices(); // Initial check
+        this.startMonitoring(); // Start automatic detection
+    }
+
+        /**
+     * Starts monitoring for device connection changes without polling.
+     * Uses 'adb track-devices' which is efficient and event-driven.
+     */
+    startMonitoring(): void {
+        const adbPath = this.sdkManager.getADBPath();
+        
+        // Spawn a persistent process
+        this.adbTracker = spawn(adbPath, ['track-devices']);
+
+        this.adbTracker.stdout?.on('data', () => {
+            // إذا كان هناك مؤقت سابق، قم بإلغائه
+            if (this.refreshTimeout) {
+                clearTimeout(this.refreshTimeout);
+            }
+
+            // انتظر 500 مللي ثانية قبل التحديث، للتأكد من استقرار الاتصال
+            this.refreshTimeout = setTimeout(() => {
+                this.refreshDevices();
+            }, 500);
+        });
+
+        this.adbTracker.on('error', (err) => {
+            console.error('ADB Tracking Error:', err);
+        });
     }
 
     /**
@@ -75,11 +108,19 @@ export class DeviceManager {
                 }
             }
 
+              if (this.selectedDevice) {
+                const deviceStillConnected = this.devices.find(d => d.id === this.selectedDevice?.id);
+                if (!deviceStillConnected) {
+                    this.selectedDevice = null; // الجهاز فُصل، احذف الاختيار
+                } else {
+                    this.selectedDevice = deviceStillConnected; // تحديث بياناته (مثل الحالة offline/online)
+                }
+            }
+
 
             if (!this.selectedDevice && this.devices.length > 0) {
                 this.selectedDevice = this.devices[0];
             }
-
 
             this.onDidChangeDevicesEmitter.fire();
         } catch(error: any) {
@@ -183,6 +224,13 @@ export class DeviceManager {
     }
 
     dispose() {
+        if (this.adbTracker) {
+            this.adbTracker.kill();
+            this.adbTracker = null;
+        }
+        if (this.refreshTimeout) {
+            clearTimeout(this.refreshTimeout);
+        }
         this.onDidChangeDevicesEmitter.dispose();
     }
 }
