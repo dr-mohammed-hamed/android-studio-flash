@@ -10,7 +10,7 @@
 
 **A lightweight VS Code extension that brings essential Android Studio features to your fingertips**
 
-*Build, run, and debug Android apps without the heavy resource consumption of Android Studio*
+*Build, run, and debug Android apps without the heavy resource consumption of Android Studio. Features event-driven device monitoring for zero-impact on your system's RAM and CPU.*
 
 </div>
 
@@ -26,9 +26,10 @@
 - **Sync Gradle** - Synchronize project dependencies
 
 ### 📱 Device Management
-- **USB Devices** - Automatic detection of connected devices
-- **Device Selection** - Easy switching between multiple devices
-- **Real-time Status** - Live connection status indicators
+- **⚡ Instant Device Detection** - Devices appear immediately when plugged in, with zero lag.
+- **🍃 Zero-Resource Monitoring** - Uses event-driven ADB tracking instead of heavy polling loops, saving your CPU and RAM.
+- **Device Selection** - Easy switching between multiple devices and emulators.
+- **Real-time Status** - Live connection status (Online, Offline, Unauthorized).
 
 ### 📡 Wireless Debugging
 - **Wireless Debugging (Android 11+)** - Connect without cables using pairing code
@@ -154,6 +155,7 @@ Run **Android: Run Diagnostics** from the Command Palette to check:
 - **Quick Run**: Click the status bar button to build & run instantly
 - **Filter Logcat**: Use app filter to see only your app's logs
 - **Save Wireless Devices**: Connected wireless devices are saved for auto-reconnect
+- **Plug & Play**: No need to manually refresh devices! The extension listens to USB events and updates the device list instantly when a cable is connected or disconnected.
 
 ---
 
