@@ -39,11 +39,10 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
                 // Build Actions section
                 new AndroidTreeItem('🔨 Build Actions', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
-                // Devices section
+                // Devices section (Now includes wireless controls)
                 new AndroidTreeItem('📱 Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
-                // Wireless Devices section
-                new AndroidTreeItem('📡 Wireless Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
+                // Note: "Wireless Devices" folder has been removed as requested
                 
                 // Tools section
                 new AndroidTreeItem('🛠️ Tools', '', 'header', vscode.TreeItemCollapsibleState.Expanded)
@@ -62,68 +61,47 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
         }
 
         if (element.label === '📱 Devices') {
+            const items: AndroidTreeItem[] = [];
             const devices = this.deviceManager.getDevices();
             const selectedDevice = this.deviceManager.getSelectedDevice();
 
-            if (devices.length === 0) {
-                return [new AndroidTreeItem('⚠️  No devices connected', '', 'empty')];
+            // 1. List all connected devices (USB + Wireless)
+            if (devices.length > 0) {
+                devices.forEach(device => {
+                    const isSelected = selectedDevice?.id === device.id;
+                    const label = this.getDeviceLabel(device, isSelected);
+                    const item = new AndroidTreeItem(label, device.id, 'device');
+                    item.device = device;
+                    item.command = {
+                        command: 'android.selectDeviceFromTree',
+                        title: 'Select Device',
+                        arguments: [device]
+                    };
+                    items.push(item);
+                });
+            } else {
+                // If no devices, show an information item
+                items.push(new AndroidTreeItem('⚠️  No devices connected', '', 'empty'));
             }
 
-            return devices.map(device => {
-                const isSelected = selectedDevice?.id === device.id;
-                const label = this.getDeviceLabel(device, isSelected);
-                const item = new AndroidTreeItem(label, device.id, 'device');
-                item.device = device;
-                item.command = {
-                    command: 'android.selectDeviceFromTree',
-                    title: 'Select Device',
-                    arguments: [device]
-                };
-                return item;
-            });
-        }
+            // 2. Add Wireless Device Option (Moved here as requested)
+            items.push(new AndroidTreeItem('➕ Add Wireless Device', 'android.setupWireless', 'action'));
 
-        if (element.label === '📡 Wireless Devices') {
-            const wirelessDevices = this.wirelessManager.getWirelessDevices();
-            
-            const items: AndroidTreeItem[] = [
-                // Add new device button
-                new AndroidTreeItem('➕ Add Wireless Device', 'android.setupWireless', 'action')
-            ];
-
-            // Show connected devices
-            wirelessDevices.forEach(device => {
-                // Connection type icon
-                const typeIcon = device.connectionType === 'wireless-debug' ? '📡' : '🔌';
-                const label = `${typeIcon} ${device.model || device.ipAddress}`;
-                const description = `${device.ipAddress}:${device.port} (${device.connectionType})`;
-                
-                const item = new AndroidTreeItem(
-                    label,
-                    device.id,
-                    'wireless-device'
-                );
-                item.device = device;
-                item.contextValue = 'wirelessDevice';
-                item.description = description;
-                item.tooltip = `${device.connectionType === 'wireless-debug' ? 'Wireless Debugging' : 'TCP/IP'}\n${device.ipAddress}:${device.port}`;
-                items.push(item);
-            });
-
-            if (wirelessDevices.length === 0) {
-                items.push(new AndroidTreeItem('⚠️ No wireless devices', '', 'empty'));
-            }
+            // 3. Reload Devices Option (Moved here as requested)
+            items.push(new AndroidTreeItem('🔄 Refresh Devices', 'android.refreshDevices', 'action'));
 
             return items;
         }
+
+        // Note: The "Wireless Devices" block has been completely removed.
 
         if (element.label === '🛠️ Tools') {
             return [
                 new AndroidTreeItem('📋 Show Logcat', 'android.showLogcat', 'action'),
                 new AndroidTreeItem('🔍 Logcat Filter Mode', 'android.toggleLogcatFilter', 'action'),
                 new AndroidTreeItem('🗑️  Clear Logcat', 'android.clearLogcat', 'action'),
-                new AndroidTreeItem('⏹️  Stop Logcat', 'android.stopLogcat', 'action'),
-                new AndroidTreeItem('🔄 Refresh Devices', 'android.refreshDevices', 'action')
+                new AndroidTreeItem('⏹️  Stop Logcat', 'android.stopLogcat', 'action')
+                // Note: "Refresh Devices" moved to "Devices" section
             ];
         }
 

@@ -1,24 +1,35 @@
-# Ignore build output
+# Dependencies
+node_modules/
+package-lock.json
+# (ملاحظة: عادة نرفع package-lock.json ولكن إذا كنت تفضل تجاهله اتركه هنا، 
+# المعيار العالمي هو عدم تجاهله، لذا يفضل إزالة السطر أعلاه إذا أردت تثبيت النسخ بدقة)
+
+# Build Output (Compiled JS files)
 out/
 dist/
 
-# Dependencies
-node_modules/
-
-# Extension package
+# Extension Packages (The packed extension)
 *.vsix
 
-# IDE files
-.vscode-test/
-.idea/
-
-# OS files
-.DS_Store
-Thumbs.db
+# VS Code Local Configuration
+.vscode/
+# Exception: If you want to share tasks but hide launch config:
+# .vscode/*
+# !.vscode/tasks.json
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# TypeScript cache
-*.tsbuildinfo
+# Testing
+coverage/
+.vscode-test/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Temporary files (Based on your list)
+tree.txt
