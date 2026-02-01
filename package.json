@@ -146,6 +146,12 @@
         "command": "android.createKeystore",
         "title": "🔐 Create Signing Keystore",
         "category": "Android"
+      },
+      {
+        "command": "android.selectModule",
+        "title": "🎯 Select Target Module",
+        "category": "Android",
+        "icon": "$(package)"
       }
     ],
     "viewsContainers": {
@@ -171,6 +177,11 @@
         {
           "command": "android.refreshDevices",
           "when": "view == androidDevices",
+          "group": "navigation"
+        },
+        {
+          "command": "android.selectModule",
+          "when": "view == androidPanel",
           "group": "navigation"
         }
       ],

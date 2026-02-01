@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AndroidSDKManager } from './core/AndroidSDKManager';
 import { GradleService } from './core/GradleService';
+import { GradleModuleService } from './core/GradleModuleService';
 import { DeviceManager } from './devices/DeviceManager';
 import { AndroidTreeProvider } from './ui/AndroidTreeProvider';
 import { BuildSystem } from './build/BuildSystem';
@@ -23,7 +24,8 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
         // Initialize core components
         const sdkManager = new AndroidSDKManager();
-        const gradleService = new GradleService();
+        const gradleService = new GradleService(sdkManager);
+        const gradleModuleService = new GradleModuleService(); // New Service
         deviceManager = new DeviceManager();
         buildSystem = new BuildSystem(gradleService, deviceManager);
         logcatManager = new LogcatManager(deviceManager);
@@ -36,7 +38,29 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Initialize UI components
         statusBar = new BuildStatusBar(deviceManager);
-        treeProvider = new AndroidTreeProvider(deviceManager, buildSystem, logcatManager, wirelessManager);
+        treeProvider = new AndroidTreeProvider(
+            deviceManager, 
+            buildSystem, 
+            logcatManager, 
+            wirelessManager,
+            gradleService,
+            gradleModuleService
+        );
+
+        // Module Selection Status Bar
+        const moduleStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90);
+        moduleStatusBar.command = 'android.selectModule';
+        context.subscriptions.push(moduleStatusBar);
+
+        // Restore saved module selection
+        const savedModule = context.workspaceState.get<string>('android-studio-flash.selectedModule');
+        if (savedModule) {
+            gradleService.setTargetModule(savedModule);
+            moduleStatusBar.text = `$(package) Module: ${savedModule}`;
+        } else {
+            moduleStatusBar.text = '$(package) Module: (Project Root)';
+        }
+        moduleStatusBar.show();
 
         // Register Tree View
         vscode.window.registerTreeDataProvider('androidPanel', treeProvider);
@@ -45,6 +69,64 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.commands.registerCommand('android.buildApk', async () => {
                 await buildSystem.buildDebug();
+            })
+        );
+
+        // ... [Existing Commands] ...
+
+        // NEW: Select Module Command
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.selectModule', async () => {
+                try {
+                    const root = gradleService.findProjectRoot();
+                    const modules = await gradleModuleService.getModules(root);
+                    
+                    if (modules.length === 0) {
+                        vscode.window.showInformationMessage('No modules found in settings.gradle');
+                        return;
+                    }
+
+                    const selected = await vscode.window.showQuickPick(modules, {
+                        placeHolder: 'Select Gradle Module to Build',
+                        title: 'Select Active Module'
+                    });
+
+                    if (selected) {
+                        // Save state
+                        await context.workspaceState.update('android-studio-flash.selectedModule', selected);
+                        
+                        // Update Service
+                        gradleService.setTargetModule(selected);
+                        
+                        // Update UI
+                        moduleStatusBar.text = `$(package) Module: ${selected}`;
+                        vscode.window.showInformationMessage(`✅ Active Module: ${selected}`);
+                        
+                        // Refresh Tree to show checkmark
+                        treeProvider.refresh();
+                    }
+                } catch (error: any) {
+                    vscode.window.showErrorMessage(`Failed to select module: ${error.message}`);
+                }
+            })
+        );
+
+        // NEW: Select Module Directly from Tree
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.selectModuleFromTree', async (moduleName: string) => {
+                if (moduleName) {
+                    // Update Service
+                    gradleService.setTargetModule(moduleName);
+                    
+                    // Save state
+                    await context.workspaceState.update('android-studio-flash.selectedModule', moduleName);
+
+                    // Update UI
+                    moduleStatusBar.text = `$(package) Module: ${moduleName}`;
+                    
+                    // Refresh Tree to show checkmark
+                    treeProvider.refresh();
+                }
             })
         );
 

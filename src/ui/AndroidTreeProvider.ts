@@ -3,8 +3,10 @@ import { DeviceManager, AndroidDevice } from '../devices/DeviceManager';
 import { BuildSystem } from '../build/BuildSystem';
 import { LogcatManager } from '../logcat/LogcatManager';
 import { WirelessADBManager } from '../wireless/WirelessADBManager';
+import { GradleService } from '../core/GradleService';
+import { GradleModuleService } from '../core/GradleModuleService';
 
-type TreeItemType = 'header' | 'device' | 'action' | 'empty' | 'wireless-device';
+type TreeItemType = 'header' | 'device' | 'action' | 'empty' | 'wireless-device' | 'module';
 
 /**
  * Tree data provider for the Android Control Panel in the sidebar.
@@ -17,7 +19,9 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
         private deviceManager: DeviceManager,
         private buildSystem: BuildSystem,
         private logcatManager: LogcatManager,
-        private wirelessManager: WirelessADBManager
+        private wirelessManager: WirelessADBManager,
+        private gradleService: GradleService,
+        private gradleModuleService: GradleModuleService
     ) {
         this.deviceManager.onDidChangeDevices(() => {
             this.refresh();
@@ -38,7 +42,7 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
             return [
                 // Build Actions section
                 new AndroidTreeItem('🔨 Build Actions', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
-                
+
                 // Devices section (Now includes wireless controls)
                 new AndroidTreeItem('📱 Devices', '', 'header', vscode.TreeItemCollapsibleState.Expanded),
                 
@@ -51,13 +55,72 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
 
         // Children based on section
         if (element.label === '🔨 Build Actions') {
-            return [
-                new AndroidTreeItem('▶️  Build & Run', 'android.runApp', 'action'),
-                new AndroidTreeItem('🔨 Build Debug APK', 'android.buildDebug', 'action'),
-                new AndroidTreeItem('📦 Build Release APK', 'android.buildRelease', 'action'),
-                new AndroidTreeItem('🧹 Clean Project', 'android.cleanProject', 'action'),
-                new AndroidTreeItem('🔄 Sync Gradle', 'android.syncGradle', 'action')
-            ];
+            const children: AndroidTreeItem[] = [];
+
+            // 1. Module Selector (Nested Folder)
+            const currentModule = this.gradleService.getTargetModule() || '(Project Root)';
+            
+            // This item acts as a folder containing the modules
+            const moduleItem = new AndroidTreeItem(
+                `📦 Target: ${currentModule}`, 
+                '', 
+                'header', // Use header type for folder icon behavior or customized below
+                vscode.TreeItemCollapsibleState.Collapsed
+            );
+            moduleItem.contextValue = 'androidModuleGroup'; // Special context if needed
+            children.push(moduleItem);
+
+            // 2. Build Commands
+            children.push(new AndroidTreeItem('▶️  Build & Run', 'android.runApp', 'action'));
+            children.push(new AndroidTreeItem('🔨 Build Debug APK', 'android.buildDebug', 'action'));
+            children.push(new AndroidTreeItem('📦 Build Release APK', 'android.buildRelease', 'action'));
+            children.push(new AndroidTreeItem('🧹 Clean Project', 'android.cleanProject', 'action'));
+            children.push(new AndroidTreeItem('🔄 Sync Gradle', 'android.syncGradle', 'action'));
+
+            return children;
+        }
+
+        // Handle the "Target" item specifically
+        if (element.label.startsWith('📦 Target:')) {
+            const items: AndroidTreeItem[] = [];
+            try {
+                const root = this.gradleService.findProjectRoot();
+                const modules = await this.gradleModuleService.getModules(root);
+                const currentModule = this.gradleService.getTargetModule(); // null means Project Root
+
+                // Add Project Root explicitly if not in list
+                if (!modules.includes('(Project Root)')) {
+                    modules.unshift('(Project Root)');
+                }
+
+                modules.forEach(module => {
+                    // Check if this module is selected
+                    const isSelected = (module === '(Project Root)' && currentModule === null) || 
+                                       (module === currentModule);
+                    
+                    const label = isSelected ? `✓ ${module}` : module;
+                    
+                    const item = new AndroidTreeItem(label, module, 'module');
+                    item.moduleName = module; // Custom property
+                    item.contextValue = 'androidModule';
+                    
+                    // Command to select this module
+                    item.command = {
+                        command: 'android.selectModuleFromTree',
+                        title: 'Select Module',
+                        arguments: [module]
+                    };
+                    
+                    if (isSelected) {
+                        item.description = 'Active';
+                    }
+
+                    items.push(item);
+                });
+            } catch (error) {
+                items.push(new AndroidTreeItem('⚠️ Error loading modules', '', 'empty'));
+            }
+            return items;
         }
 
         if (element.label === '📱 Devices') {
@@ -137,6 +200,7 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
  */
 class AndroidTreeItem extends vscode.TreeItem {
     public device?: AndroidDevice;
+    public moduleName?: string;
 
     constructor(
         public readonly label: string,
@@ -156,6 +220,9 @@ class AndroidTreeItem extends vscode.TreeItem {
         } else if (itemType === 'device') {
             this.contextValue = 'androidDevice';
             this.tooltip = `Click to select this device`;
+        } else if (itemType === 'module') {
+            this.contextValue = 'androidModule';
+            this.iconPath = new vscode.ThemeIcon('package');
         } else if (itemType === 'header') {
             this.contextValue = 'androidHeader';
             this.iconPath = new vscode.ThemeIcon('folder');
