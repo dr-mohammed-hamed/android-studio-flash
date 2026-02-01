@@ -34,6 +34,7 @@
 ### 📡 Wireless Debugging
 - **Wireless Debugging (Android 11+)** - Connect without cables using pairing code
 - **ADB over TCP/IP (Android 4.0+)** - Legacy wireless support
+- **📶 Hotspot Mode Support** - Works when your Android device IS the hotspot (PC connects to phone's hotspot)
 - **Auto-reconnect** - Automatically reconnects to saved devices on startup
 - **Network Scanning** - Discover devices on your local network
 

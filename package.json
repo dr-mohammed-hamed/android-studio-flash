@@ -2,7 +2,7 @@
   "name": "android-studio-flash",
   "displayName": "Android Studio Flash",
   "description": "A lightweight alternative to Android Studio - bringing essential Android development features to VS Code",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "publisher": "dr-mohammed-hamed",
   "author": {
     "name": "Dr. Mohammed Hamed"

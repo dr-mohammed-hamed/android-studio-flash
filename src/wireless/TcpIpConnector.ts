@@ -183,24 +183,40 @@ export class TcpIpConnector {
     }
 
     /**
-     * Get device IP address (while still connected via USB)
+     * Get device IP address (while still connected via USB).
+     * Searches multiple network interfaces to support various connection modes:
+     * - wlan0: Standard WiFi connection (device connected to router/hotspot)
+     * - ap0/swlan0/wlan1: Hotspot mode (device IS the hotspot)
+     * - rndis0: USB tethering interface
      */
     private async getDeviceIp(deviceId: string): Promise<string | null> {
         try {
-            // Try to get IP via WiFi
+            // Get ALL network interfaces instead of just wlan0
+            // This allows detection when device is acting as a Hotspot
             const { stdout } = await execAsync(
-                `"${this.adbPath}" -s ${deviceId} shell ip addr show wlan0`,
+                `"${this.adbPath}" -s ${deviceId} shell ip addr`,
                 { timeout: 5000 }
             );
 
-            // Look for: inet 192.168.x.x/24
-            const match = stdout.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
-            if (match && match[1]) {
-                console.log(`✅ Got device IP: ${match[1]}`);
-                return match[1];
+            // Search for private network IPs in order of priority:
+            // 1. 192.168.x.x (most common for WiFi/Hotspot)
+            // 2. 10.x.x.x (some networks use this range)
+            // 3. 172.16-31.x.x (less common private range)
+            const privateIpPatterns = [
+                /inet\s+(192\.168\.\d+\.\d+)/,
+                /inet\s+(10\.\d+\.\d+\.\d+)/,
+                /inet\s+(172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)/
+            ];
+
+            for (const pattern of privateIpPatterns) {
+                const match = stdout.match(pattern);
+                if (match && match[1]) {
+                    console.log(`✅ Got device IP: ${match[1]}`);
+                    return match[1];
+                }
             }
             
-            console.warn('⚠️ No IP found in wlan0 output');
+            console.warn('⚠️ No private IP found in any network interface');
             return null;
 
         } catch (error: any) {
