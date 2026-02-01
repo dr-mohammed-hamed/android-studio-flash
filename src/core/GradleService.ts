@@ -112,6 +112,34 @@ export class GradleService {
     }
 
     /**
+     * Build Release APK with signing parameters
+     * Passes signing config via Gradle command line properties
+     */
+    async buildReleaseSigned(
+        keystorePath: string,
+        keyAlias: string,
+        storePassword: string,
+        keyPassword: string
+    ): Promise<string> {
+        return await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: '📦 Building Signed Release APK...',
+            cancellable: false
+        }, async () => {
+            // Pass signing parameters via Gradle properties
+            // These can be read in build.gradle using project.findProperty()
+            const signingArgs = [
+                `"-PANDROID_SIGNING_STORE_FILE=${keystorePath}"`,
+                `"-PANDROID_SIGNING_KEY_ALIAS=${keyAlias}"`,
+                `"-PANDROID_SIGNING_STORE_PASSWORD=${storePassword}"`,
+                `"-PANDROID_SIGNING_KEY_PASSWORD=${keyPassword}"`
+            ].join(' ');
+
+            return await this.executeGradleTask(`assembleRelease ${signingArgs}`);
+        });
+    }
+
+    /**
      * Clean project
      */
     async clean(): Promise<string> {
@@ -146,20 +174,42 @@ export class GradleService {
 
     /**
      * Get built APK path
+     * Searches for actual APK files in the output directory
      */
     getApkPath(variant: 'debug' | 'release' = 'debug'): string {
         const workspaceFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
-        const apkPath = path.join(
+        const apkDir = path.join(
             workspaceFolder,
             'app',
             'build',
             'outputs',
             'apk',
-            variant,
-            `app-${variant}.apk`
+            variant
         );
-        
-        return apkPath;
+
+        // Default fallback path
+        const defaultPath = path.join(apkDir, `app-${variant}.apk`);
+
+        // Try to find actual APK file in the directory
+        try {
+            if (fs.existsSync(apkDir)) {
+                const files = fs.readdirSync(apkDir);
+                // Find any .apk file, prefer signed over unsigned
+                const apkFiles = files.filter(f => f.endsWith('.apk'));
+                
+                if (apkFiles.length > 0) {
+                    // Prefer files without "unsigned" in name
+                    const signedApk = apkFiles.find(f => !f.includes('unsigned'));
+                    const selectedApk = signedApk || apkFiles[0];
+                    console.log(`✅ Found APK: ${selectedApk}`);
+                    return path.join(apkDir, selectedApk);
+                }
+            }
+        } catch (error) {
+            console.warn('Error scanning APK directory:', error);
+        }
+
+        return defaultPath;
     }
 
     /**

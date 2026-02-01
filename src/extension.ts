@@ -7,6 +7,8 @@ import { BuildSystem } from './build/BuildSystem';
 import { BuildStatusBar } from './ui/BuildStatusBar';
 import { LogcatManager } from './logcat/LogcatManager';
 import { WirelessADBManager } from './wireless/WirelessADBManager';
+import { KeystoreManager } from './signing/KeystoreManager';
+import { SigningWizard } from './signing/SigningWizard';
 
 let deviceManager: DeviceManager;
 let buildSystem: BuildSystem;
@@ -26,6 +28,11 @@ export async function activate(context: vscode.ExtensionContext) {
         buildSystem = new BuildSystem(gradleService, deviceManager);
         logcatManager = new LogcatManager(deviceManager);
         wirelessManager = new WirelessADBManager(sdkManager.getADBPath(), context);
+
+        // Initialize signing components
+        const keystoreManager = new KeystoreManager(context);
+        const signingWizard = new SigningWizard(keystoreManager);
+        buildSystem.setSigningWizard(signingWizard);
 
         // Initialize UI components
         statusBar = new BuildStatusBar(deviceManager);
@@ -62,6 +69,13 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.commands.registerCommand('android.syncGradle', async () => {
                 await gradleService.syncGradle();
+            })
+        );
+
+        // Signing Commands
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.createKeystore', async () => {
+                await keystoreManager.createKeystore();
             })
         );
 

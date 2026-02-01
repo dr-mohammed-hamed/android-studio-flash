@@ -141,6 +141,11 @@
         "command": "android.refreshWireless",
         "title": "🔄 Refresh Wireless Devices",
         "category": "Android"
+      },
+      {
+        "command": "android.createKeystore",
+        "title": "🔐 Create Signing Keystore",
+        "category": "Android"
       }
     ],
     "viewsContainers": {

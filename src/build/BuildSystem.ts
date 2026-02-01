@@ -2,15 +2,25 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { GradleService } from '../core/GradleService';
 import { DeviceManager } from '../devices/DeviceManager';
+import { SigningWizard } from '../signing/SigningWizard';
 
 /**
  * Manages Android build operations including building, running, and debugging.
  */
 export class BuildSystem {
+    private signingWizard: SigningWizard | null = null;
+
     constructor(
         private gradleService: GradleService,
         private deviceManager: DeviceManager
     ) {}
+
+    /**
+     * Set the signing wizard (injected after construction)
+     */
+    setSigningWizard(wizard: SigningWizard): void {
+        this.signingWizard = wizard;
+    }
 
     /**
      * Build Debug APK
@@ -44,30 +54,59 @@ export class BuildSystem {
     }
 
     /**
-     * Build Release APK
+     * Build Release APK with signing wizard
      */
     async buildRelease(): Promise<void> {
         try {
-            await this.gradleService.buildRelease();
+            // Run signing wizard if available
+            if (this.signingWizard) {
+                const result = await this.signingWizard.run();
+                
+                if (!result || !result.shouldProceed) {
+                    vscode.window.showInformationMessage('❌ Build cancelled');
+                    return;
+                }
+
+                // Build with or without signing based on wizard result
+                if (result.signingMode === 'signed' && result.keystoreConfig && result.storePassword) {
+                    // Build with signing parameters passed to Gradle
+                    await this.gradleService.buildReleaseSigned(
+                        result.keystoreConfig.keystorePath,
+                        result.keystoreConfig.keyAlias,
+                        result.storePassword,
+                        result.keyPassword || result.storePassword
+                    );
+                } else {
+                    // Build unsigned or rely on gradle config
+                    await this.gradleService.buildRelease();
+                }
+            } else {
+                // No wizard, just build
+                await this.gradleService.buildRelease();
+            }
             
             const apkPath = this.gradleService.getApkPath('release');
             
             if (fs.existsSync(apkPath)) {
-                vscode.window.showInformationMessage(
+                const action = await vscode.window.showInformationMessage(
                     '✅ Release APK built successfully!',
+                    'Install on device',
                     'Open folder'
-                ).then(action => {
-                    if (action === 'Open folder') {
-                        const path = require('path');
-                        vscode.env.openExternal(vscode.Uri.file(path.dirname(apkPath)));
-                    }
-                });
+                );
+
+                if (action === 'Install on device') {
+                    await this.installAndRun(apkPath);
+                } else if (action === 'Open folder') {
+                    const path = require('path');
+                    vscode.env.openExternal(vscode.Uri.file(path.dirname(apkPath)));
+                }
             }
 
         } catch (error: any) {
             vscode.window.showErrorMessage(`❌ Build failed: ${error.message}`);
         }
     }
+
 
     /**
      * Clean project

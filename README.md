@@ -19,9 +19,11 @@
 ## ✨ Features
 
 ### 🔨 Build System
+
 - **One-click Build & Run** - Build and deploy your app with a single click
 - **Debug APK** - Quick debug builds for development
-- **Release APK** - Production-ready builds
+- **Release APK with Signing Wizard** - Smart wizard guides you through signing your release builds
+- **🔐 Keystore Creator** - Generate signing keys without Android Studio
 - **Clean Project** - Remove build artifacts
 - **Sync Gradle** - Synchronize project dependencies
 

@@ -100,8 +100,9 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
                 new AndroidTreeItem('📋 Show Logcat', 'android.showLogcat', 'action'),
                 new AndroidTreeItem('🔍 Logcat Filter Mode', 'android.toggleLogcatFilter', 'action'),
                 new AndroidTreeItem('🗑️  Clear Logcat', 'android.clearLogcat', 'action'),
-                new AndroidTreeItem('⏹️  Stop Logcat', 'android.stopLogcat', 'action')
-                // Note: "Refresh Devices" moved to "Devices" section
+                new AndroidTreeItem('⏹️  Stop Logcat', 'android.stopLogcat', 'action'),
+                new AndroidTreeItem('🔐 Create Signing Key', 'android.createKeystore', 'action'),
+                new AndroidTreeItem('🔍 Run Diagnostics', 'android.runDiagnostics', 'action')
             ];
         }
 
