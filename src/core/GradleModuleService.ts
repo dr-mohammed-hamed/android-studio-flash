@@ -46,15 +46,7 @@ export class GradleModuleService {
     private parseModules(content: string): string[] {
         const modules: string[] = ['(Project Root)']; // Default option to build everything
         
-        // Regex to find include statements
-        // Matches include followed by quotes single or double, optionally inside parens
-        const includeRegex = /include\s*\(?['"](:[^'"]+)['"]/g;
-        
-        // Also handle comma separated lists: include ':a', ':b'
-        // Strategy: First find all strings starting with : inside include calls? 
-        // Simpler: Just find any string starting with : that looks like a module definition
-        // Common pattern in settings.gradle is include ":mod1", ":mod2"
-        
+        // Regex to find any module declaration (strings starting with :)
         const regex = /['"](:[^'"]+)['"]/g;
         
         let match;

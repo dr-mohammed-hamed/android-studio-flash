@@ -22,9 +22,6 @@ export class GradleService {
     }
 
     /**
-     * Get Gradle Wrapper path
-     */
-    /**
      * Find the Android project root directory.
      * Searches for settings.gradle or build.gradle in root and immediate subdirectories.
      */

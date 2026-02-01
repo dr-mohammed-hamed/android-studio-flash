@@ -26,6 +26,15 @@
 - **🔐 Keystore Creator** - Generate signing keys without Android Studio
 - **Clean Project** - Remove build artifacts
 - **Sync Gradle** - Synchronize project dependencies
+- **🧠 Smart APK Discovery** - Automatically finds APK files even with complex build flavors (e.g., `afatDebug`, `googleRelease`)
+
+### 📦 Multi-Module Project Support
+
+- **Module Selection** - Target specific modules in large projects (like Telegram, Signal, etc.)
+- **Sidebar Module Picker** - Visual module selection in the Android Control Panel
+- **Status Bar Indicator** - Quick view and change of active module
+- **Persistent Selection** - Remembers your module choice between sessions
+- **Auto-Detection** - Parses `settings.gradle` to discover all project modules
 
 ### 📱 Device Management
 - **⚡ Instant Device Detection** - Devices appear immediately when plugged in, with zero lag.
@@ -50,6 +59,7 @@
 - **Android Control Panel** - Dedicated sidebar with all tools
 - **Status Bar Integration** - Quick access from the status bar
 - **Diagnostics Tool** - Troubleshoot connection issues
+- **Auto `local.properties`** - Automatically creates/updates SDK path configuration
 
 ---
 
