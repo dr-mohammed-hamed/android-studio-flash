@@ -21,7 +21,7 @@ export interface WirelessDevice extends AndroidDevice {
 /**
  * Saved wireless device configuration for persistence
  */
-interface SavedWirelessDevice {
+export interface SavedWirelessDevice {
     id: string;
     ipAddress: string;
     port: number;
@@ -213,6 +213,20 @@ export class WirelessADBManager {
     }
 
     /**
+     * Get list of saved wireless devices
+     */
+    async getSavedDevices(): Promise<SavedWirelessDevice[]> {
+        return this.loadWirelessDevices();
+    }
+
+    /**
+     * Connect to a specific saved device
+     */
+    async connectSavedDevice(savedDevice: SavedWirelessDevice): Promise<boolean> {
+        return this.attemptReconnect(savedDevice);
+    }
+
+    /**
      * Auto-reconnect to saved devices on startup
      */
     async autoReconnectSavedDevices(): Promise<void> {
@@ -249,8 +263,11 @@ export class WirelessADBManager {
     /**
      * Attempt to reconnect a single device
      */
-    private async attemptReconnect(savedDevice: SavedWirelessDevice): Promise<boolean> {
-        const endpoint = `${savedDevice.ipAddress}:${savedDevice.port}`;
+    private async attemptReconnect(savedDevice: any): Promise<boolean> {
+        let endpoint = savedDevice.id;
+        if (savedDevice.ipAddress && savedDevice.port) {
+            endpoint = `${savedDevice.ipAddress}:${savedDevice.port}`;
+        }
         
         try {
             // Attempt connection with short timeout
@@ -286,8 +303,11 @@ export class WirelessADBManager {
     /**
      * Disconnect a wireless device
      */
-    async disconnectDevice(device: WirelessDevice): Promise<void> {
-        const endpoint = `${device.ipAddress}:${device.port}`;
+    async disconnectDevice(device: any): Promise<void> {
+        let endpoint = device.id;
+        if (device.ipAddress && device.port) {
+            endpoint = `${device.ipAddress}:${device.port}`;
+        }
         
         try {
             await execAsync(`"${this.adbPath}" disconnect ${endpoint}`);

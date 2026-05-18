@@ -2,7 +2,7 @@
   "name": "android-studio-flash",
   "displayName": "Android Studio Flash",
   "description": "A lightweight alternative to Android Studio - bringing essential Android development features to VS Code",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "dr-mohammed-hamed",
   "author": {
     "name": "Dr. Mohammed Hamed"
@@ -138,6 +138,16 @@
         "category": "Android"
       },
       {
+        "command": "android.copyWirelessIp",
+        "title": "📋 Copy IP Address",
+        "category": "Android"
+      },
+      {
+        "command": "android.showDeviceInfo",
+        "title": "ℹ️ Show Device Info",
+        "category": "Android"
+      },
+      {
         "command": "android.refreshWireless",
         "title": "🔄 Refresh Wireless Devices",
         "category": "Android"
@@ -187,18 +197,28 @@
       ],
       "view/item/context": [
         {
-          "command": "android.forgetWirelessDevice",
-          "when": "view == androidPanel && viewItem == wirelessDevice",
-          "group": "wireless@1"
+          "command": "android.showDeviceInfo",
+          "when": "view == androidPanel && (viewItem == disconnectedWirelessDevice || viewItem == connectedWirelessDevice || viewItem == androidDevice)",
+          "group": "wireless@0"
         },
         {
           "command": "android.reconnectWirelessDevice",
-          "when": "view == androidPanel && viewItem == wirelessDevice",
+          "when": "view == androidPanel && viewItem == disconnectedWirelessDevice",
+          "group": "wireless@1"
+        },
+        {
+          "command": "android.forgetWirelessDevice",
+          "when": "view == androidPanel && viewItem == disconnectedWirelessDevice",
           "group": "wireless@2"
         },
         {
           "command": "android.disconnectWireless",
-          "when": "view == androidPanel && viewItem == wirelessDevice",
+          "when": "view == androidPanel && viewItem == connectedWirelessDevice",
+          "group": "wireless@1"
+        },
+        {
+          "command": "android.copyWirelessIp",
+          "when": "view == androidPanel && (viewItem == disconnectedWirelessDevice || viewItem == connectedWirelessDevice)",
           "group": "wireless@3"
         }
       ],

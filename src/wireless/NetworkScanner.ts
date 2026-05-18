@@ -1,7 +1,9 @@
 import * as os from 'os';
+import * as net from 'net';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
+import { fetchFriendlyDeviceInfo } from '../utils/deviceUtils';
 
 const execAsync = promisify(exec);
 
@@ -16,6 +18,8 @@ export interface ScannedDevice {
 
 /**
  * Scans the local network for Android devices with ADB enabled.
+ * Uses super-fast raw TCP sockets to probe for port 5555 before calling ADB,
+ * enabling full-subnet /24 scanning (254 IPs) in parallel under 2-3 seconds.
  */
 export class NetworkScanner {
     constructor(private adbPath: string) {}
@@ -38,42 +42,82 @@ export class NetworkScanner {
             title: '🔍 Scanning network...',
             cancellable: true
         }, async (progress, token) => {
-            const devices: ScannedDevice[] = [];
+            const activeIps: string[] = [];
             const port = 5555; // Default ADB port
 
-            // Scan from .1 to .254 (with speed optimization)
-            // Testing only a sample of addresses for speed
+            // Generate all 254 subnet addresses
             const ipsToTest: string[] = [];
-            
-            // Test common addresses first
-            for (let i = 1; i <= 20; i++) {
-                ipsToTest.push(`${subnet}.${i}`);
-            }
-            for (let i = 100; i <= 120; i++) {
-                ipsToTest.push(`${subnet}.${i}`);
-            }
-            for (let i = 200; i <= 220; i++) {
+            for (let i = 1; i <= 254; i++) {
                 ipsToTest.push(`${subnet}.${i}`);
             }
 
+            // Group the 254 IPs into concurrent batches of 50 to avoid socket resource depletion
+            const batchSize = 50;
             let tested = 0;
-            for (const ip of ipsToTest) {
+
+            for (let i = 0; i < ipsToTest.length; i += batchSize) {
                 if (token.isCancellationRequested) {
                     break;
                 }
 
-                tested++;
-                progress.report({ 
-                    message: `Checking ${ip}... (${tested}/${ipsToTest.length})`,
-                    increment: (100 / ipsToTest.length)
+                const batch = ipsToTest.slice(i, i + batchSize);
+                
+                // Scan batch in parallel
+                const batchPromises = batch.map(async (ip) => {
+                    if (token.isCancellationRequested) {
+                        return;
+                    }
+                    
+                    const isOpen = await this.probeAdbPort(ip, port, 1000);
+                    if (isOpen) {
+                        activeIps.push(ip);
+                    }
                 });
 
-                // Attempt connection (without long timeout)
-                if (await this.testConnection(ip, port)) {
-                    devices.push({ ip, port });
-                }
+                await Promise.all(batchPromises);
+
+                tested += batch.length;
+                progress.report({
+                    message: `Scanning subnet ${subnet}.x... (${tested}/${ipsToTest.length})`,
+                    increment: (batch.length / ipsToTest.length) * 100
+                });
             }
 
+            if (activeIps.length === 0) {
+                return [];
+            }
+
+            // Step 2: Fetch friendly device names for discovered active IPs in parallel using ADB
+            const devices: ScannedDevice[] = [];
+            progress.report({ message: `Fetching friendly name for ${activeIps.length} active device(s)...` });
+
+            const fetchPromises = activeIps.map(async (ip) => {
+                const endpoint = `${ip}:${port}`;
+                let modelName = 'Wireless Device';
+                
+                try {
+                    // Try to connect to query info
+                    const { stdout } = await execAsync(`"${this.adbPath}" connect ${endpoint}`, { timeout: 3000 });
+                    if (stdout.includes('connected')) {
+                        // Fetch using our awesome friendly brand utility
+                        const info = await fetchFriendlyDeviceInfo(this.adbPath, endpoint, 'Wireless Device');
+                        modelName = info.model;
+                        
+                        // Disconnect so we don't hold the connection unless needed
+                        await execAsync(`"${this.adbPath}" disconnect ${endpoint}`, { timeout: 2000 });
+                    }
+                } catch (e) {
+                    console.error(`Failed to connect & query info for ${endpoint}`, e);
+                }
+
+                devices.push({
+                    ip,
+                    port,
+                    name: `${modelName} (${ip}:${port})`
+                });
+            });
+
+            await Promise.all(fetchPromises);
             return devices;
         });
     }
@@ -102,34 +146,30 @@ export class NetworkScanner {
     }
 
     /**
-     * Test connection to IP:Port
+     * Fast TCP port probe using raw Node sockets
      */
-    private async testConnection(ip: string, port: number): Promise<boolean> {
-        try {
-            const endpoint = `${ip}:${port}`;
+    private probeAdbPort(ip: string, port: number, timeout: number = 1000): Promise<boolean> {
+        return new Promise((resolve) => {
+            const socket = new net.Socket();
             
-            // Quick connection attempt with short timeout
-            const { stdout } = await execAsync(
-                `"${this.adbPath}" connect ${endpoint}`,
-                { timeout: 1500 } // 1.5 seconds timeout only
-            );
-
-            // If connection succeeded
-            if (stdout.includes('connected')) {
-                // Disconnect immediately (testing only)
-                try {
-                    await execAsync(`"${this.adbPath}" disconnect ${endpoint}`, { timeout: 500 });
-                } catch (e) {
-                    // Ignore disconnect errors
-                }
-                return true;
-            }
-
-            return false;
-
-        } catch (error) {
-            // Connection failed = device not found
-            return false;
-        }
+            socket.setTimeout(timeout);
+            
+            socket.once('connect', () => {
+                socket.destroy();
+                resolve(true);
+            });
+            
+            socket.once('timeout', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.once('error', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            
+            socket.connect(port, ip);
+        });
     }
 }

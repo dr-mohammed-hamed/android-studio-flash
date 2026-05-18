@@ -31,6 +31,28 @@ export async function activate(context: vscode.ExtensionContext) {
         logcatManager = new LogcatManager(deviceManager);
         wirelessManager = new WirelessADBManager(sdkManager.getADBPath(), context);
 
+        // Auto-save newly connected wireless devices
+        deviceManager.onDidChangeDevices(async () => {
+            const connectedDevices = deviceManager.getDevices();
+            for (const device of connectedDevices) {
+                if (device.id.includes(':') && (device.state === 'device' || device.state === 'online')) {
+                    const [ip, portStr] = device.id.split(':');
+                    const port = parseInt(portStr) || 5555;
+                    await wirelessManager.addSavedDevice({
+                        id: device.id,
+                        ipAddress: ip,
+                        port: port,
+                        connectionType: port === 5555 ? 'tcpip' : 'wireless-debug',
+                        model: device.model,
+                        product: device.product,
+                        device: device.device,
+                        state: device.state,
+                        type: 'device'
+                    });
+                }
+            }
+        });
+
         // Initialize signing components
         const keystoreManager = new KeystoreManager(context);
         const signingWizard = new SigningWizard(keystoreManager);
@@ -241,10 +263,22 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         context.subscriptions.push(
-            vscode.commands.registerCommand('android.disconnectWireless', async (device) => {
+            vscode.commands.registerCommand('android.disconnectWireless', async (arg) => {
+                let device: any = null;
+                if (arg) {
+                    if (arg.device) {
+                        device = arg.device;
+                    } else if (arg.id) {
+                        device = arg;
+                    }
+                }
+                
                 if (device) {
                     await wirelessManager.disconnectDevice(device);
+                    await deviceManager.refreshDevices();
                     treeProvider.refresh();
+                } else {
+                    vscode.window.showErrorMessage('❌ Could not identify device to disconnect.');
                 }
             })
         );
@@ -265,25 +299,136 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         context.subscriptions.push(
-            vscode.commands.registerCommand('android.forgetWirelessDevice', async (device) => {
-                if (device && device.id) {
-                    await wirelessManager.removeSavedDevice(device.id);
+            vscode.commands.registerCommand('android.forgetWirelessDevice', async (arg) => {
+                let deviceId: string | undefined;
+                if (arg) {
+                    if (arg.device && arg.device.id) {
+                        deviceId = arg.device.id;
+                    } else if (arg.id) {
+                        deviceId = arg.id;
+                    }
+                }
+                
+                if (deviceId) {
+                    await wirelessManager.removeSavedDevice(deviceId);
                     await deviceManager.refreshDevices();
                     treeProvider.refresh();
+                } else {
+                    vscode.window.showErrorMessage('❌ Could not identify device to forget.');
                 }
             })
         );
 
         context.subscriptions.push(
-            vscode.commands.registerCommand('android.reconnectWirelessDevice', async (device) => {
+            vscode.commands.registerCommand('android.reconnectWirelessDevice', async (arg) => {
+                let device: any = null;
+                if (arg) {
+                    if (arg.device) {
+                        device = arg.device;
+                    } else if (arg.ipAddress && arg.port) {
+                        device = arg;
+                    }
+                }
+                
                 if (device && device.ipAddress && device.port) {
                     const endpoint = `${device.ipAddress}:${device.port}`;
-                    vscode.window.showInformationMessage(`🔄 Reconnecting to ${endpoint}...`);
-                    // Will be handled by attemptReconnect internally
-                    await wirelessManager.autoReconnectSavedDevices();
-                    await deviceManager.refreshDevices();
-                    treeProvider.refresh();
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: `Connecting to ${device.model || endpoint}...`,
+                        cancellable: false
+                    }, async () => {
+                        const success = await wirelessManager.connectSavedDevice(device);
+                        if (success) {
+                            vscode.window.showInformationMessage(`✅ Connected to ${device.model || endpoint}`);
+                        } else {
+                            vscode.window.showErrorMessage(`❌ Failed to connect to ${device.model || endpoint}. Please ensure device is on the same network or pair it again.`);
+                        }
+                        await deviceManager.refreshDevices();
+                        treeProvider.refresh();
+                    });
+                } else {
+                    vscode.window.showErrorMessage('❌ Invalid device configuration for reconnection.');
                 }
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.copyWirelessIp', async (arg) => {
+                let ipAddress: string | undefined;
+                if (arg) {
+                    if (arg.device && arg.device.ipAddress) {
+                        ipAddress = arg.device.ipAddress;
+                    } else if (arg.ipAddress) {
+                        ipAddress = arg.ipAddress;
+                    } else if (arg.device && arg.device.id && arg.device.id.includes(':')) {
+                        ipAddress = arg.device.id.split(':')[0];
+                    } else if (arg.id && arg.id.includes(':')) {
+                        ipAddress = arg.id.split(':')[0];
+                    }
+                }
+                
+                if (ipAddress) {
+                    await vscode.env.clipboard.writeText(ipAddress);
+                    vscode.window.showInformationMessage(`📋 Copied IP Address to Clipboard: ${ipAddress}`);
+                } else {
+                    vscode.window.showErrorMessage('❌ Could not find IP Address for this device.');
+                }
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.showDeviceInfo', async (arg) => {
+                let device: any = null;
+                if (arg) {
+                    if (arg.device) {
+                        device = arg.device;
+                    } else {
+                        device = arg;
+                    }
+                }
+                
+                if (!device) {
+                    vscode.window.showErrorMessage('❌ Could not identify device to show information.');
+                    return;
+                }
+
+                const isWireless = device.id.includes(':') || !!device.ipAddress;
+                const isEmulator = device.id.startsWith('emulator-') || device.type === 'emulator';
+                
+                let connectionTypeLabel = 'USB Connection';
+                if (isEmulator) {
+                    connectionTypeLabel = 'Android Virtual Device (Emulator)';
+                } else if (isWireless) {
+                    const port = device.port || (device.id.includes(':') ? parseInt(device.id.split(':')[1]) : 5555);
+                    connectionTypeLabel = port === 5555 ? 'Wireless (ADB over TCP/IP)' : 'Wireless Debugging (Android 11+)';
+                }
+
+                let ipAddress = device.ipAddress;
+                let port = device.port;
+                if (isWireless && (!ipAddress || !port)) {
+                    const parts = device.id.split(':');
+                    ipAddress = parts[0];
+                    port = parseInt(parts[1]) || 5555;
+                }
+
+                const details = [
+                    `📱 Device Info: ${device.model || device.product || 'Unknown'}`,
+                    `• Model: ${device.model || 'Unknown'}`,
+                    `• Product: ${device.product || 'Unknown'}`,
+                    `• Device ID/Serial: ${device.id}`,
+                    `• Connection Type: ${connectionTypeLabel}`,
+                    `• Current State: ${device.state || 'Unknown'}`
+                ];
+
+                if (isWireless && ipAddress) {
+                    details.push(`• IP Address: ${ipAddress}`);
+                    details.push(`• ADB Port: ${port}`);
+                }
+
+                vscode.window.showInformationMessage(
+                    details[0] + '\n\n' + details.slice(1).join('\n'),
+                    { modal: true }
+                );
             })
         );
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { promisify } from 'util';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
 import { exec, spawn, ChildProcess } from 'child_process'; // Added spawn and ChildProcess
+import { fetchFriendlyDeviceInfo } from '../utils/deviceUtils';
 
 const execAsync = promisify(exec);
 
@@ -15,6 +16,8 @@ export interface AndroidDevice {
     model?: string;
     product?: string;
     device?: string;
+    manufacturer?: string;
+    marketName?: string;
 }
 
 /**
@@ -107,6 +110,18 @@ export class DeviceManager {
                     }
                 }
             }
+
+            // Fetch detailed properties (brand, manufacturer, friendly market name) for active physical devices in parallel
+            const detailPromises = this.devices.map(async (device) => {
+                if (device.type !== 'emulator' && (device.state === 'device' || device.state === 'online')) {
+                    const info = await fetchFriendlyDeviceInfo(adbPath, device.id, device.model);
+                    device.manufacturer = info.manufacturer;
+                    device.marketName = info.marketName;
+                    device.model = info.model;
+                }
+            });
+
+            await Promise.all(detailPromises);
 
               if (this.selectedDevice) {
                 const deviceStillConnected = this.devices.find(d => d.id === this.selectedDevice?.id);

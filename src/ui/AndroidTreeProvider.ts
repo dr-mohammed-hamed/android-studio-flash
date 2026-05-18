@@ -135,6 +135,10 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
                     const label = this.getDeviceLabel(device, isSelected);
                     const item = new AndroidTreeItem(label, device.id, 'device');
                     item.device = device;
+                    if (device.id.includes(':')) {
+                        item.contextValue = 'connectedWirelessDevice';
+                        item.tooltip = `Wireless Device (Connected) - Click to select`;
+                    }
                     item.command = {
                         command: 'android.selectDeviceFromTree',
                         title: 'Select Device',
@@ -142,15 +146,49 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
                     };
                     items.push(item);
                 });
-            } else {
-                // If no devices, show an information item
+            }
+
+            // 2. List saved wireless devices that are not currently connected
+            try {
+                const savedWireless = await this.wirelessManager.getSavedDevices();
+                const connectedIds = new Set(devices.map(d => d.id));
+                
+                const disconnectedSaved = savedWireless.filter(saved => !connectedIds.has(saved.id));
+                
+                if (disconnectedSaved.length > 0) {
+                    disconnectedSaved.forEach(saved => {
+                        const name = saved.model || `${saved.ipAddress}:${saved.port}`;
+                        const label = `🔴 📡 [Saved] ${name}`;
+                        const item = new AndroidTreeItem(label, saved.id, 'wireless-device');
+                        item.device = {
+                            id: saved.id,
+                            type: 'device',
+                            state: 'offline',
+                            model: saved.model,
+                            ipAddress: saved.ipAddress,
+                            port: saved.port
+                        } as any;
+                        item.command = {
+                            command: 'android.reconnectWirelessDevice',
+                            title: 'Reconnect Device',
+                            arguments: [saved]
+                        };
+                        items.push(item);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load saved wireless devices for tree view:', error);
+            }
+
+            // If no devices connected and no saved devices, show an information item
+            if (items.length === 0) {
                 items.push(new AndroidTreeItem('⚠️  No devices connected', '', 'empty'));
             }
 
-            // 2. Add Wireless Device Option (Moved here as requested)
+            // 3. Add Wireless Device Option (Moved here as requested)
             items.push(new AndroidTreeItem('➕ Add Wireless Device', 'android.setupWireless', 'action'));
 
-            // 3. Reload Devices Option (Moved here as requested)
+            // 4. Reload Devices Option (Moved here as requested)
             items.push(new AndroidTreeItem('🔄 Refresh Devices', 'android.refreshDevices', 'action'));
 
             return items;
@@ -220,6 +258,10 @@ class AndroidTreeItem extends vscode.TreeItem {
         } else if (itemType === 'device') {
             this.contextValue = 'androidDevice';
             this.tooltip = `Click to select this device`;
+        } else if (itemType === 'wireless-device') {
+            this.contextValue = 'disconnectedWirelessDevice';
+            this.tooltip = `Click to reconnect this device`;
+            this.iconPath = new vscode.ThemeIcon('circle-outline');
         } else if (itemType === 'module') {
             this.contextValue = 'androidModule';
             this.iconPath = new vscode.ThemeIcon('package');
