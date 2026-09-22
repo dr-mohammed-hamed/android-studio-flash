@@ -134,10 +134,10 @@ export class PackageNameDetector {
     /**
      * Extract Package Name from APK using aapt
      */
-    private static async extractPackageFromApk(apkPath: string): Promise<string | null> {
+    private static async extractPackageFromApk(apkPath: string, customSdkPath?: string): Promise<string | null> {
         try {
-            // Try 1: Use aapt from Android SDK
-            const sdkPath = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+            // Try 1: Use aapt from custom or environment Android SDK
+            const sdkPath = customSdkPath || process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
             
             if (sdkPath) {
                 // Search in build-tools (using fs instead of exec to avoid memory leak)
@@ -331,8 +331,8 @@ export class PackageNameDetector {
     /**
      * Get Package Name from APK (public wrapper)
      */
-    static async getPackageFromApk(apkPath: string): Promise<string | null> {
-        return await this.extractPackageFromApk(apkPath);
+    static async getPackageFromApk(apkPath: string, customSdkPath?: string): Promise<string | null> {
+        return await this.extractPackageFromApk(apkPath, customSdkPath);
     }
 
     /**

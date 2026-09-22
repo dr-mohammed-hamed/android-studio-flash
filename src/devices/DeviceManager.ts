@@ -220,7 +220,7 @@ export class DeviceManager {
     }
 
     /**
-     * Launch app on selected device
+     * Launch app on selected device with error detection
      */
     async launchApp(packageName: string, activityName: string): Promise<void> {
         const device = this.selectedDevice;
@@ -230,44 +230,76 @@ export class DeviceManager {
         const fullActivity = activityName.includes('/')
             ? activityName
             : `${packageName}/${activityName}`;
-        await execAsync(`"${adbPath}" -s ${device.id} shell am start -n ${fullActivity}`);
+
+        const { stdout, stderr } = await execAsync(`"${adbPath}" -s ${device.id} shell am start -n "${fullActivity}"`);
+
+        // am start outputs errors to stderr or stdout while exiting with code 0
+        const combinedOutput = `${stdout}\n${stderr}`;
+        if (combinedOutput.includes('Error:') || combinedOutput.includes('Error type')) {
+            const errorMsg = (stderr.trim() || stdout.trim()).split('\n').filter(l => l.includes('Error')).join('; ') || 'Activity failed to start';
+            throw new Error(`Failed to start activity: ${errorMsg}`);
+        }
     }
 
     /**
-     * Resolve the launcher activity installed for an application package.
+     * Resolve the launcher activity installed for an application package with fallbacks.
      */
     async getLaunchableActivity(packageName: string): Promise<string> {
         const device = this.selectedDevice;
         if (!device) throw new Error('No device selected');
 
         const adbPath = this.sdkManager.getADBPath();
-        const { stdout } = await execAsync(
-            `"${adbPath}" -s ${device.id} shell cmd package resolve-activity --brief "${packageName}"`
-        );
-        const activity = stdout
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(line => line.includes('/'))
-            .pop();
+        try {
+            // Query package manager for launcher activity using explicit intent flags
+            const { stdout } = await execAsync(
+                `"${adbPath}" -s ${device.id} shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "${packageName}"`
+            );
 
-        if (!activity) {
-            throw new Error(`Unable to find launcher activity for package: ${packageName}`);
+            const activity = stdout
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => line.includes('/'))
+                .pop();
+
+            // Ensure resolved activity is valid and not a system resolver/chooser
+            if (activity && !activity.includes('ResolverActivity') && !activity.includes('ChooserActivity')) {
+                return activity;
+            }
+        } catch (error) {
+            console.warn('cmd package resolve-activity failed, falling back to default activity:', error);
         }
 
-        return activity;
+        // Fallback for older Android versions (API < 24) or systems where cmd is unavailable
+        return `${packageName}/.MainActivity`;
     }
 
     /**
-     * Get package name from APK
+     * Get package name from APK with fallback to project configuration
      */
     async getPackageName(apkPath: string): Promise<string> {
-        const packageName = await PackageNameDetector.getPackageFromApk(apkPath);
-
-        if (!packageName) {
-            throw new Error(`Unable to determine package name from APK: ${apkPath}`);
+        // Priority 1: Extract directly from APK using aapt (with detected SDK path)
+        try {
+            const sdkPath = this.sdkManager.getSDKPath();
+            const packageName = await PackageNameDetector.getPackageFromApk(apkPath, sdkPath);
+            if (packageName) {
+                return packageName;
+            }
+        } catch (error) {
+            console.warn('Could not extract package name from APK via aapt:', error);
         }
 
-        return packageName;
+        // Priority 2: Fallback to reading build.gradle / AndroidManifest from project
+        try {
+            const gradlePackage = await PackageNameDetector.detectPackageName();
+            if (gradlePackage) {
+                console.log(`✅ Package name detected from project build files: ${gradlePackage}`);
+                return gradlePackage;
+            }
+        } catch (error) {
+            console.warn('Could not detect package name from project files:', error);
+        }
+
+        throw new Error(`Unable to determine package name from APK: ${apkPath}`);
     }
 
     dispose() {
