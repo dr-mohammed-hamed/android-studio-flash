@@ -5,6 +5,7 @@ import { LogcatManager } from '../logcat/LogcatManager';
 import { WirelessADBManager } from '../wireless/WirelessADBManager';
 import { GradleService } from '../core/GradleService';
 import { GradleModuleService } from '../core/GradleModuleService';
+import { WorkspaceProjectManager } from '../core/WorkspaceProjectManager';
 
 type TreeItemType = 'header' | 'device' | 'action' | 'empty' | 'wireless-device' | 'module';
 
@@ -21,11 +22,21 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
         private logcatManager: LogcatManager,
         private wirelessManager: WirelessADBManager,
         private gradleService: GradleService,
-        private gradleModuleService: GradleModuleService
+        private gradleModuleService: GradleModuleService,
+        private workspaceProjectManager?: WorkspaceProjectManager
     ) {
         this.deviceManager.onDidChangeDevices(() => {
             this.refresh();
         });
+
+        if (this.workspaceProjectManager) {
+            this.workspaceProjectManager.onDidChangeActiveProject(() => {
+                this.refresh();
+            });
+            this.workspaceProjectManager.onDidChangeProjects(() => {
+                this.refresh();
+            });
+        }
     }
 
     refresh(): void {
@@ -56,6 +67,21 @@ export class AndroidTreeProvider implements vscode.TreeDataProvider<AndroidTreeI
         // Children based on section
         if (element.label === '🔨 Build Actions') {
             const children: AndroidTreeItem[] = [];
+
+            // 0. Project Selector (only visible if workspace contains 2+ Android projects)
+            const projects = this.workspaceProjectManager?.getProjects() || [];
+            if (projects.length > 1) {
+                const activeProject = this.workspaceProjectManager?.getActiveProject();
+                const projectName = activeProject ? activeProject.name : 'Select Project';
+                const projectItem = new AndroidTreeItem(
+                    `📁 Project: ${projectName}`,
+                    'android.selectWorkspaceProject',
+                    'action'
+                );
+                projectItem.iconPath = new vscode.ThemeIcon('root-folder');
+                projectItem.tooltip = `Active Android Project: ${projectName}\nClick to switch project`;
+                children.push(projectItem);
+            }
 
             // 1. Module Selector (Nested Folder)
             const currentModule = this.gradleService.getTargetModule() || '(Project Root)';

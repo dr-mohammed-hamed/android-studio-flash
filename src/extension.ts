@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { AndroidSDKManager } from './core/AndroidSDKManager';
 import { GradleService } from './core/GradleService';
 import { GradleModuleService } from './core/GradleModuleService';
+import { WorkspaceProjectManager } from './core/WorkspaceProjectManager';
 import { DeviceManager } from './devices/DeviceManager';
 import { AndroidTreeProvider } from './ui/AndroidTreeProvider';
 import { BuildSystem } from './build/BuildSystem';
@@ -24,7 +25,11 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
         // Initialize core components
         const sdkManager = new AndroidSDKManager();
-        const gradleService = new GradleService(sdkManager);
+        const workspaceProjectManager = new WorkspaceProjectManager(context);
+        await workspaceProjectManager.initialize();
+        context.subscriptions.push(workspaceProjectManager);
+
+        const gradleService = new GradleService(sdkManager, workspaceProjectManager);
         const gradleModuleService = new GradleModuleService(); // New Service
         deviceManager = new DeviceManager();
         buildSystem = new BuildSystem(gradleService, deviceManager);
@@ -72,8 +77,31 @@ export async function activate(context: vscode.ExtensionContext) {
             logcatManager, 
             wirelessManager,
             gradleService,
-            gradleModuleService
+            gradleModuleService,
+            workspaceProjectManager
         );
+
+        // Project Selection Status Bar (Visible only when workspace has multiple Android projects)
+        const projectStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
+        projectStatusBar.command = 'android.selectWorkspaceProject';
+        context.subscriptions.push(projectStatusBar);
+
+        const updateProjectStatusBar = () => {
+            const projects = workspaceProjectManager.getProjects();
+            if (projects.length > 1) {
+                const active = workspaceProjectManager.getActiveProject();
+                const name = active ? active.name : 'Select Project';
+                projectStatusBar.text = `$(root-folder) Project: ${name}`;
+                projectStatusBar.tooltip = `Active Android Project: ${name} (Click to switch)`;
+                projectStatusBar.show();
+            } else {
+                projectStatusBar.hide();
+            }
+        };
+
+        workspaceProjectManager.onDidChangeActiveProject(() => updateProjectStatusBar());
+        workspaceProjectManager.onDidChangeProjects(() => updateProjectStatusBar());
+        updateProjectStatusBar();
 
         // Module Selection Status Bar
         const moduleStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90);
@@ -101,6 +129,50 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         // ... [Existing Commands] ...
+
+        // NEW: Select Active Workspace Project Command
+        context.subscriptions.push(
+            vscode.commands.registerCommand('android.selectWorkspaceProject', async () => {
+                try {
+                    const projects = workspaceProjectManager.getProjects();
+                    if (projects.length === 0) {
+                        vscode.window.showInformationMessage('No Android projects detected in this workspace.');
+                        return;
+                    }
+
+                    if (projects.length === 1) {
+                        vscode.window.showInformationMessage(`Currently in single-project mode: ${projects[0].name}`);
+                        return;
+                    }
+
+                    const active = workspaceProjectManager.getActiveProject();
+                    const items = projects.map(p => ({
+                        label: p.projectRoot === active?.projectRoot ? `$(check) ${p.name}` : p.name,
+                        description: p.relativePath ? `Folder: ${p.workspaceFolder.name}/${p.relativePath}` : `Workspace: ${p.workspaceFolder.name}`,
+                        detail: p.projectRoot,
+                        project: p
+                    }));
+
+                    const selected = await vscode.window.showQuickPick(items, {
+                        placeHolder: 'Select active Android project',
+                        title: 'Android Projects in Workspace'
+                    });
+
+                    if (selected) {
+                        await workspaceProjectManager.setActiveProject(selected.project);
+                        // Reset target module to (Project Root) when switching projects
+                        gradleService.setTargetModule(null);
+                        await context.workspaceState.update('android-studio-flash.selectedModule', undefined);
+                        moduleStatusBar.text = '$(package) Module: (Project Root)';
+
+                        vscode.window.showInformationMessage(`✅ Active Android Project: ${selected.project.name}`);
+                        treeProvider.refresh();
+                    }
+                } catch (error: any) {
+                    vscode.window.showErrorMessage(`Failed to select project: ${error.message}`);
+                }
+            })
+        );
 
         // NEW: Select Module Command
         context.subscriptions.push(

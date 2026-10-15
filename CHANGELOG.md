@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-15
+
+### Added & Improved
+- **Multi-Root Workspace & Monorepo Support**
+  - Full support for VS Code multi-root workspaces (`.code-workspace`) and monorepos.
+  - Automatic detection of Android projects across all open workspace folders and subdirectories.
+  - Smart silent resolution: mixed workspaces (e.g. backend + android) automatically select the Android project without prompting.
+  - Added `android.selectWorkspaceProject` command and QuickPick switcher for workspaces with multiple Android apps.
+  - Dynamic status bar indicator (`$(root-folder) Project: <name>`) and Control Panel tree switcher that only display when multiple projects exist, ensuring zero clutter for single-project developers.
+  - Resolves GitHub Issue #3.
+
 ## [0.4.1] - 2026-09-22
 
 ### Fixed & Improved

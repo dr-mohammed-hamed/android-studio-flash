@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { WorkspaceProjectManager } from '../core/WorkspaceProjectManager';
 import { KeystoreManager, KeystoreConfig } from './KeystoreManager';
 
 /**
@@ -208,13 +209,16 @@ export class SigningWizard {
      * Check if build.gradle already has signing configuration
      */
     private async checkGradleSigningConfig(): Promise<boolean> {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) return false;
+        const workspaceManager = WorkspaceProjectManager.getInstance();
+        const projectRoot = workspaceManager?.getActiveProjectRoot() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!projectRoot) return false;
 
         // Check app/build.gradle or app/build.gradle.kts
         const gradleFiles = [
-            path.join(workspaceFolder.uri.fsPath, 'app', 'build.gradle'),
-            path.join(workspaceFolder.uri.fsPath, 'app', 'build.gradle.kts')
+            path.join(projectRoot, 'app', 'build.gradle'),
+            path.join(projectRoot, 'app', 'build.gradle.kts'),
+            path.join(projectRoot, 'build.gradle'),
+            path.join(projectRoot, 'build.gradle.kts')
         ];
 
         for (const gradleFile of gradleFiles) {

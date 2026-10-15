@@ -8,6 +8,7 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 import { AndroidSDKManager } from './AndroidSDKManager';
+import { WorkspaceProjectManager } from './WorkspaceProjectManager';
 
 /**
  * Service for executing Gradle tasks and managing Android project builds.
@@ -15,47 +16,66 @@ import { AndroidSDKManager } from './AndroidSDKManager';
 export class GradleService {
     private outputChannel: vscode.OutputChannel;
     private sdkManager: AndroidSDKManager;
+    private workspaceManager?: WorkspaceProjectManager;
 
-    constructor(sdkManager: AndroidSDKManager) {
+    constructor(sdkManager: AndroidSDKManager, workspaceManager?: WorkspaceProjectManager) {
         this.outputChannel = vscode.window.createOutputChannel('Gradle');
         this.sdkManager = sdkManager;
+        this.workspaceManager = workspaceManager;
     }
 
     /**
      * Find the Android project root directory.
-     * Searches for settings.gradle or build.gradle in root and immediate subdirectories.
+     * Prioritizes active project from WorkspaceProjectManager,
+     * then searches all workspace folders and immediate subdirectories.
      */
     public findProjectRoot(): string {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
+        // 1. If WorkspaceProjectManager has an active project, use it directly
+        const activeProject = this.workspaceManager?.getActiveProject();
+        if (activeProject) {
+            return activeProject.projectRoot;
+        }
+
+        const activeRoot = this.workspaceManager?.getActiveProjectRoot();
+        if (activeRoot && this.isProjectRoot(activeRoot)) {
+            return activeRoot;
+        }
+
+        // 2. Search all workspace folders (not just the first one)
+        const folders = vscode.workspace.workspaceFolders;
+        if (!folders || folders.length === 0) {
             throw new Error('No workspace folder found');
         }
-        
-        const rootPath = workspaceFolder.uri.fsPath;
 
-        // 1. Check if workspace root is the project root
-        if (this.isProjectRoot(rootPath)) {
-            return rootPath;
-        }
-
-        // 2. Check immediate subdirectories
-        try {
-            const subdirs = fs.readdirSync(rootPath)
-                .map(name => path.join(rootPath, name))
-                .filter(dir => fs.statSync(dir).isDirectory());
-
-            for (const dir of subdirs) {
-                if (this.isProjectRoot(dir)) {
-                    return dir;
-                }
+        for (const folder of folders) {
+            const rootPath = folder.uri.fsPath;
+            if (this.isProjectRoot(rootPath)) {
+                return rootPath;
             }
-        } catch (error) {
-            console.warn('Error scanning subdirectories:', error);
+
+            try {
+                const subdirs = fs.readdirSync(rootPath)
+                    .map(name => path.join(rootPath, name))
+                    .filter(dir => {
+                        try {
+                            return fs.statSync(dir).isDirectory();
+                        } catch {
+                            return false;
+                        }
+                    });
+
+                for (const dir of subdirs) {
+                    if (this.isProjectRoot(dir)) {
+                        return dir;
+                    }
+                }
+            } catch (error) {
+                console.warn('Error scanning subdirectories:', error);
+            }
         }
 
-        // Default to workspace root if no specific android project found
-        // This allows the error to be handled downstream or standard behavior
-        return rootPath;
+        // Default to first folder if nothing matched
+        return folders[0].uri.fsPath;
     }
 
     /**
@@ -74,10 +94,11 @@ export class GradleService {
         const hasWrapper = fs.existsSync(path.join(dirPath, 'gradlew')) || 
                           fs.existsSync(path.join(dirPath, 'gradlew.bat'));
 
-        // A valid root should ideally have build configuration AND a wrapper, 
-        // OR a settings file (which implies structure).
-        // For Telegram/complex apps: settings.gradle is key.
-        return (hasSettings || hasBuild) && hasWrapper;
+        const hasAppModule = fs.existsSync(path.join(dirPath, 'app', 'build.gradle')) || 
+                             fs.existsSync(path.join(dirPath, 'app', 'build.gradle.kts'));
+
+        // If it has settings.gradle OR (build.gradle AND (wrapper OR app module))
+        return hasSettings || (hasBuild && (hasWrapper || hasAppModule));
     }
 
     /**
@@ -303,7 +324,7 @@ export class GradleService {
      * Handles build flavors (e.g. build/outputs/apk/flavor/debug/app.apk).
      */
     getApkPath(variant: 'debug' | 'release' = 'debug'): string {
-        const workspaceFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
+        const workspaceFolder = this.findProjectRoot();
         
         // Determine module path from targetModule (e.g. :feature:login -> feature/login)
         // Default to 'app' if no module selected (standard Android convention)

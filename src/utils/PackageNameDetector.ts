@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { WorkspaceProjectManager } from '../core/WorkspaceProjectManager';
 
 const execAsync = promisify(exec);
 
@@ -44,7 +45,7 @@ export class PackageNameDetector {
         }
 
         // Priority 2: From build.gradle with Build Variants (very good)
-        const gradlePackage = await this.detectPackageName();
+        const gradlePackage = await this.detectPackageName(gradlePath);
         if (gradlePackage) {
             results.push({
                 packageName: gradlePackage,
@@ -231,13 +232,16 @@ export class PackageNameDetector {
     /**
      * Extract Package Name from project (with Build Variants support)
      */
-    static async detectPackageName(): Promise<string | null> {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            return null;
+    static async detectPackageName(customRoot?: string): Promise<string | null> {
+        let projectRoot = customRoot;
+        if (!projectRoot) {
+            const workspaceManager = WorkspaceProjectManager.getInstance();
+            projectRoot = workspaceManager?.getActiveProjectRoot() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         }
 
-        const projectRoot = workspaceFolder.uri.fsPath;
+        if (!projectRoot) {
+            return null;
+        }
 
         // Try 1: From build.gradle with Build Variants
         const packageFromGradle = await this.extractFromBuildGradle(projectRoot);

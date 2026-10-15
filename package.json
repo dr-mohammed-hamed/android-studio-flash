@@ -2,7 +2,7 @@
   "name": "android-studio-flash",
   "displayName": "Android Studio Flash",
   "description": "A lightweight alternative to Android Studio - bringing essential Android development features to VS Code",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "dr-mohammed-hamed",
   "author": {
     "name": "Dr. Mohammed Hamed"
@@ -34,9 +34,11 @@
   "activationEvents": [
     "workspaceContains:**/build.gradle",
     "workspaceContains:**/build.gradle.kts",
+    "workspaceContains:**/settings.gradle",
+    "workspaceContains:**/settings.gradle.kts",
     "onCommand:android.buildApk",
     "onCommand:android.runApp",
-    "onView:androidDevices"
+    "onView:androidPanel"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -162,6 +164,12 @@
         "title": "🎯 Select Target Module",
         "category": "Android",
         "icon": "$(package)"
+      },
+      {
+        "command": "android.selectWorkspaceProject",
+        "title": "📁 Select Android Project",
+        "category": "Android",
+        "icon": "$(root-folder)"
       }
     ],
     "viewsContainers": {
@@ -186,13 +194,18 @@
       "view/title": [
         {
           "command": "android.refreshDevices",
-          "when": "view == androidDevices",
-          "group": "navigation"
+          "when": "view == androidPanel",
+          "group": "navigation@0"
+        },
+        {
+          "command": "android.selectWorkspaceProject",
+          "when": "view == androidPanel && android:hasMultipleProjects",
+          "group": "navigation@1"
         },
         {
           "command": "android.selectModule",
           "when": "view == androidPanel",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

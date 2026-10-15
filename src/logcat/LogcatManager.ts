@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { DeviceManager } from '../devices/DeviceManager';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
 import { PackageNameDetector } from '../utils/PackageNameDetector';
+import { WorkspaceProjectManager } from '../core/WorkspaceProjectManager';
 
 const execAsync = promisify(exec);
 
@@ -58,8 +59,8 @@ export class LogcatManager {
 
         // If mode is "app" and no package name
         if (this.currentFilterMode === 'app' && !this.currentPackageName) {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            const projectRoot = workspaceFolder?.uri.fsPath;
+            const workspaceManager = WorkspaceProjectManager.getInstance();
+            const projectRoot = workspaceManager?.getActiveProjectRoot() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
             // Use smart detection system to get all sources
             const detectionResults = await PackageNameDetector.detectPackageNameSmart(

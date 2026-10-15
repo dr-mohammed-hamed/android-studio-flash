@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { WorkspaceProjectManager } from '../core/WorkspaceProjectManager';
 
 const execAsync = promisify(exec);
 
@@ -130,7 +131,7 @@ export class KeystoreManager {
             title: 'Save Keystore As',
             defaultUri: vscode.Uri.file(
                 path.join(
-                    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir(),
+                    WorkspaceProjectManager.getInstance()?.getActiveProjectRoot() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir(),
                     'release-key.jks'
                 )
             ),
